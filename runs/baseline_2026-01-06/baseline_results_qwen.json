@@ -1,0 +1,150 @@
+{
+  "n": 20,
+  "prefill_ms_p50": 81.42095300172514,
+  "prefill_ms_p95": 101.72455000065384,
+  "decode_tps_p50": 51.86725995489435,
+  "decode_tps_p95": 52.51200610815844,
+  "peak_vram_gb_p95": 15.5896635055542,
+  "items": [
+    {
+      "id": "single_1510",
+      "prefill_ms": 65.71959599932597,
+      "decode_tps": 51.86725995489435,
+      "peak_vram_gb": 15.530832767486572,
+      "num_images": 1
+    },
+    {
+      "id": "single_966",
+      "prefill_ms": 83.12465100061672,
+      "decode_tps": 42.09060814964473,
+      "peak_vram_gb": 15.510589122772217,
+      "num_images": 1
+    },
+    {
+      "id": "single_1921",
+      "prefill_ms": 98.88550899995607,
+      "decode_tps": 40.583202573951375,
+      "peak_vram_gb": 15.581696033477783,
+      "num_images": 1
+    },
+    {
+      "id": "single_1873",
+      "prefill_ms": 104.26876600104151,
+      "decode_tps": 40.56770291327354,
+      "peak_vram_gb": 15.549502849578857,
+      "num_images": 1
+    },
+    {
+      "id": "single_974",
+      "prefill_ms": 59.247242999845184,
+      "decode_tps": 44.76857115354971,
+      "peak_vram_gb": 15.492291450500488,
+      "num_images": 1
+    },
+    {
+      "id": "single_2407",
+      "prefill_ms": 78.97896299982676,
+      "decode_tps": 41.13724726085374,
+      "peak_vram_gb": 15.494649887084961,
+      "num_images": 1
+    },
+    {
+      "id": "single_1248",
+      "prefill_ms": 56.46592499942926,
+      "decode_tps": 44.164556337825154,
+      "peak_vram_gb": 15.516981601715088,
+      "num_images": 1
+    },
+    {
+      "id": "single_2841",
+      "prefill_ms": 101.72455000065384,
+      "decode_tps": 43.14371497800096,
+      "peak_vram_gb": 15.549502849578857,
+      "num_images": 1
+    },
+    {
+      "id": "single_3280",
+      "prefill_ms": 49.63305199999013,
+      "decode_tps": 38.38660250761241,
+      "peak_vram_gb": 15.497128963470459,
+      "num_images": 1
+    },
+    {
+      "id": "single_2675",
+      "prefill_ms": 66.8429700017441,
+      "decode_tps": 45.49723370260342,
+      "peak_vram_gb": 15.53615951538086,
+      "num_images": 1
+    },
+    {
+      "id": "single_486",
+      "prefill_ms": 68.91895800072234,
+      "decode_tps": 52.241752941681575,
+      "peak_vram_gb": 15.549502849578857,
+      "num_images": 1
+    },
+    {
+      "id": "single_1272",
+      "prefill_ms": 47.46696000074735,
+      "decode_tps": 52.51200610815844,
+      "peak_vram_gb": 15.491462230682373,
+      "num_images": 1
+    },
+    {
+      "id": "single_789",
+      "prefill_ms": 80.66388500083121,
+      "decode_tps": 52.532284850462126,
+      "peak_vram_gb": 15.561729907989502,
+      "num_images": 1
+    },
+    {
+      "id": "single_2959",
+      "prefill_ms": 69.96516599974711,
+      "decode_tps": 52.49423518459644,
+      "peak_vram_gb": 15.549502849578857,
+      "num_images": 1
+    },
+    {
+      "id": "single_660",
+      "prefill_ms": 81.42095300172514,
+      "decode_tps": 52.023255152647614,
+      "peak_vram_gb": 15.561729907989502,
+      "num_images": 1
+    },
+    {
+      "id": "single_1717",
+      "prefill_ms": 82.8269880003063,
+      "decode_tps": 51.72579130301373,
+      "peak_vram_gb": 15.561729907989502,
+      "num_images": 1
+    },
+    {
+      "id": "stress_4372",
+      "prefill_ms": 91.71818300092127,
+      "decode_tps": 51.99624713026392,
+      "peak_vram_gb": 15.5896635055542,
+      "num_images": 1
+    },
+    {
+      "id": "stress_4343",
+      "prefill_ms": 91.8302619993483,
+      "decode_tps": 52.150583331235545,
+      "peak_vram_gb": 15.5896635055542,
+      "num_images": 1
+    },
+    {
+      "id": "stress_4244",
+      "prefill_ms": 91.31872100078908,
+      "decode_tps": 52.01876237754015,
+      "peak_vram_gb": 15.5896635055542,
+      "num_images": 1
+    },
+    {
+      "id": "stress_4224",
+      "prefill_ms": 93.48189800039108,
+      "decode_tps": 52.27084635941062,
+      "peak_vram_gb": 15.5896635055542,
+      "num_images": 1
+    }
+  ]
+}
