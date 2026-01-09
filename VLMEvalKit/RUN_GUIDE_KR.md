@@ -1,6 +1,6 @@
-# VLMEvalKit Setup for Qwen2-VL (RTX 4090 / WSL2)
+# VLMEvalKit Setup for LLaVA (RTX 4090 / WSL2)
 
-RTX 4090 (24GB) 및 WSL2 환경에서 `Qwen2-VL-7B` 모델을 `VLMEvalKit`으로 평가하기 위한 설치 및 실행 가이드입니다.
+RTX 4090 (24GB) 및 WSL2 환경에서 `LLaVA` (LLaVA-v1.5-7b 등) 모델을 `VLMEvalKit`으로 평가하기 위한 설치 및 실행 가이드입니다.
 
 ## 1. Environment Setup (환경 설정)
 
@@ -14,43 +14,64 @@ RTX 4090 (24GB) 및 WSL2 환경에서 `Qwen2-VL-7B` 모델을 `VLMEvalKit`으로
 # 가상환경 생성 (Python 3.10 권장)
 conda create -n vlmeval python=3.10 -y
 conda activate vlmeval
-2. Installation (설치)
-2.1 Clone Repository
-Bash
+```
 
-git clone [https://github.com/open-compass/VLMEvalKit.git](https://github.com/open-compass/VLMEvalKit.git)
+## 2. Installation (설치)
+
+### 2.1 Clone Repository
+
+```bash
+git clone https://github.com/open-compass/VLMEvalKit.git
 cd VLMEvalKit
 pip install -e .
-2.2 Install Dependencies (Crucial)
-Qwen2-VL 최신 모델 지원을 위해 transformers를 개발자 버전으로 설치해야 하며, 관련 유틸리티를 추가합니다.
+```
 
-Bash
+### 2.2 Install Dependencies (Crucial for LLaVA)
 
+LLaVA 모델 실행을 위해 LLaVA 패키지와 관련 의존성을 설치해야 합니다.
+
+```bash
 # Install PyTorch (Compatible with CUDA 12.8)
 pip install torch torchvision torchaudio
 
-# Install bleeding-edge Transformers (Required for Qwen2-VL)
-pip install git+[https://github.com/huggingface/transformers](https://github.com/huggingface/transformers)
+# Install LLaVA (Required for LLaVA models)
+pip install --upgrade pip
+pip install "git+https://github.com/haotian-liu/LLaVA.git"
 
-# Install Qwen utilities
-pip install qwen-vl-utils
-2.3 Optimization Strategy (Flash Attention vs SDPA)
-Note: RTX 4090 환경에서 flash-attn 컴파일 시 시스템 RAM 부족(OOM) 및 CUDA 버전 미스매치 이슈가 발생할 수 있습니다. 따라서 **PyTorch Native SDPA(Scaled Dot-Product Attention)**를 사용하여 설치 없이 가속을 적용합니다.
+# Install COCO evaluation tools (Optional, for COCO Caption)
+pip install pycocoevalcap
 
-설정 방법: flash-attn 설치를 건너뛰고, 실행 시 자동으로 SDPA가 적용되도록 하거나 코드에서 명시적으로 설정합니다. (만약 실행 시 FlashAttention2 에러가 발생한다면, 소스 코드의 모델 로드 부분에서 attn_implementation="flash_attention_2"를 제거하거나 "sdpa"로 변경합니다.)
+# Install bleeding-edge Transformers (Optional but recommended)
+pip install git+https://github.com/huggingface/transformers
+```
 
-3. Execution (실행)
+### 2.3 Optimization Strategy (Flash Attention vs SDPA)
+
+Note: RTX 4090 환경에서 `flash-attn` 컴파일 시 시스템 RAM 부족(OOM) 및 CUDA 버전 미스매치 이슈가 발생할 수 있습니다. 따라서 **PyTorch Native SDPA(Scaled Dot-Product Attention)**를 사용하여 설치 없이 가속을 적용하는 것이 안정적일 수 있습니다.
+
+만약 `flash-attn`을 사용하려면 별도로 설치해야 하며, 설치 실패 시 기본적으로 SDPA가 사용되거나 HF transformers 구현체가 사용됩니다.
+
+## 3. Execution (실행)
+
 MMBench (Dev) 평가 실행: 단일 GPU(4090)를 사용하여 평가를 수행합니다.
+LLaVA v1.5 7B 모델을 기준으로 합니다.
 
-Bash
-
+```bash
 # MMBench_DEV_EN 데이터셋 평가
 torchrun --nproc_per_node=1 run.py \
   --data MMBench_DEV_EN \
-  --model Qwen2-VL-7B-Instruct \
+  --model llava_v1.5_7b \
   --verbose
-  
-4. Troubleshooting History
-Issue 1: flash-attn 설치 실패 (RAM 부족으로 인한 컴파일러 강제 종료)
 
-Solution: 설치를 포기하고 PyTorch 내장 sdpa 최적화 사용. 성능 차이는 미미함.
+# COCO 데이터셋 (Image Captioning) 평가
+torchrun --nproc_per_node=1 run.py \
+  --data COCO_VAL \
+  --model llava_v1.5_7b \
+  --verbose
+```
+
+## 4. Troubleshooting History
+
+**Issue 1: flash-attn 설치 실패**
+- 증상: RAM 부족으로 인한 컴파일러 강제 종료 등.
+- 해결: 설치를 건너뛰고 PyTorch 내장 최적화(SDPA)를 사용하거나, 메모리가 충분한 환경에서 빌드된 wheel 파일을 사용.
