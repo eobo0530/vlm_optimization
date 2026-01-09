@@ -1,2 +1,0 @@
-torch 2.9.1+cu128 cuda 12.8 is_cuda True
-transformers 5.0.0.dev0
