@@ -1975,11 +1975,12 @@ qianfanvl_series = {
     'Qianfan-VL-70B': partial(Qianfan_VL, model_path='baidu/Qianfan-VL-70B'),
 }
 
-lfm2vl_series = {
-    "LFM2-VL-450M": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-450M"),
-    "LFM2-VL-1.6B": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-1.6B"),
-    "LFM2-VL-3B": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-3B"),
-}
+# lfm2vl_series = {
+#     "LFM2-VL-450M": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-450M"),
+#     "LFM2-VL-1.6B": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-1.6B"),
+#     "LFM2-VL-3B": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-3B"),
+# }
+lfm2vl_series = {}
 
 internvl_groups = [
     internvl, internvl2, internvl2_5, mini_internvl, internvl2_5_mpo, 
