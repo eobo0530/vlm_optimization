@@ -1,0 +1,15 @@
+[
+    {
+        "id": "1",
+        "prompt_struct": [
+            {
+                "type": "image",
+                "value": "LLaVA/images/001.jpg"
+            },
+            {
+                "type": "text",
+                "value": "Describe the image detailedly."
+            }
+        ]
+    }
+]

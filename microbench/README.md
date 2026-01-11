@@ -54,7 +54,7 @@ python prepare_perf_data.py
 python benchmark_perf.py \
   --model-path liuhaotian/llava-v1.5-7b \
   --data-file perf_data/coco_val_500.json \
-  --max-new-tokens 512 \
+  --max-new-tokens 64 \
   --report-file report_coco_baseline.json
 ```
 
@@ -64,7 +64,7 @@ python benchmark_perf.py \
 python benchmark_perf.py \
   --model-path liuhaotian/llava-v1.5-7b \
   --data-file perf_data/mmbench_dev_en.json \
-  --max-new-tokens 512 \
+  --max-new-tokens 128 \
   --report-file report_mmbench_baseline.json
 ```
 
