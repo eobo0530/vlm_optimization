@@ -46,6 +46,7 @@ class LLaVA(BaseModel):
                     model_base=None,
                     model_name=model_name,
                     device_map="cpu",
+                    tome_kwargs=kwargs.get("tome_kwargs", None)
                 )
             )
         except Exception as err:
@@ -226,6 +227,38 @@ class LLaVA(BaseModel):
         ].strip()
         return output
 
+
+class LLaVA_DToMe(LLaVA):
+    def __init__(self, model_path="liuhaotian/llava-v1.5-7b", threshold_path=None, **kwargs):
+        import open_clip
+        
+        def find_thresholds(threshold_finding_checkpoint):
+            print(f"Loading thresholds from {threshold_finding_checkpoint}")
+            model, _, _ = open_clip.create_model_and_transforms(
+                "ViT-L-14-336-tome-72out", 
+                pretrained=threshold_finding_checkpoint
+            )
+            tome_vision_encoder = model.visual.trunk if hasattr(model.visual, "trunk") else model.visual
+            blocks = tome_vision_encoder.blocks if hasattr(tome_vision_encoder, "blocks") else tome_vision_encoder.transformer.resblocks
+            learned_thresholds = []
+            for i, block in enumerate(blocks):
+                learned_thresholds.append(block.threshold.item())
+            return learned_thresholds
+
+        if threshold_path:
+            learned_thresholds = find_thresholds(threshold_path)
+            tome_kwargs = {
+                'pretrained': "openai",
+                'pretrained_origin_tag': "openai",
+                'merge_mode': "batch_level",
+                "repeat_merged_tokens": True,
+                "r_total": 504,
+                "specified_thresholds": learned_thresholds
+            }
+            print(f"Loaded DToMe thresholds: {len(learned_thresholds)}")
+            kwargs['tome_kwargs'] = tome_kwargs
+        
+        super().__init__(model_path=model_path, **kwargs)
 
 class LLaVA_Next(BaseModel):
 

@@ -1,4 +1,10 @@
 from vlmeval.vlm import *
+# Ensure LLaVA_DToMe is available if not exported by default
+try:
+    from vlmeval.vlm.llava.llava import LLaVA_DToMe
+except ImportError:
+    pass
+
 from vlmeval.api import *
 from functools import partial
 import os
@@ -754,6 +760,11 @@ llava_series = {
     "llava_v1_7b": partial(LLaVA, model_path=LLAVA_V1_7B_MODEL_PTH),
     "sharegpt4v_7b": partial(LLaVA, model_path="Lin-Chen/ShareGPT4V-7B"),
     "sharegpt4v_13b": partial(LLaVA, model_path="Lin-Chen/ShareGPT4V-13B"),
+    "llava_v1.5_7b_dymu": partial(
+        LLaVA_DToMe, 
+        model_path="checkpoints/vlm_checkpoints/llava-v1.5-7b",
+        threshold_path="checkpoints/threshold_checkpoints/ViT-L-14-336-tome-72out.pth"
+    ),
     "llava_next_vicuna_7b": partial(
         LLaVA_Next, model_path="llava-hf/llava-v1.6-vicuna-7b-hf"
     ),

@@ -34,15 +34,15 @@ LLaVA 모델 실행을 위해 LLaVA 패키지와 관련 의존성을 설치해�
 # Install PyTorch (Compatible with CUDA 12.8)
 pip install torch torchvision torchaudio
 
-# Install LLaVA (Required for LLaVA models)
+# Install LLaVA
 pip install --upgrade pip
 pip install "git+https://github.com/haotian-liu/LLaVA.git"
 
 # Install COCO evaluation tools (Optional, for COCO Caption)
 pip install pycocoevalcap
 
-# Install bleeding-edge Transformers (Optional but recommended)
-pip install git+https://github.com/huggingface/transformers
+# Note: Bleeding-edge transformers are NOT compatible with LLaVA 1.5
+# pip install git+https://github.com/huggingface/transformers
 ```
 
 ### 2.3 Optimization Strategy (Flash Attention vs SDPA)
