@@ -528,6 +528,7 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         pos_transform = kwargs.pop("pos_transform", None)
         pos_tracking = kwargs.pop("pos_tracking", None)
         mapping_indices = kwargs.pop("mapping_indices", None)
+        kwargs.pop("tome_kwargs", None)  # Remove tome_kwargs as it's already applied during init
         if images is not None:
             (
                 inputs,
