@@ -143,6 +143,9 @@ class CLIPVisionTowerToMe(nn.Module):
         super().__init__()
 
         self.is_loaded = False
+        
+        # Compression ratio tracking
+        self._compression_stats = {'total_original': 0, 'total_merged': 0, 'count': 0}
 
         self.vision_tower_name = vision_tower
         self.select_layer = args.mm_vision_select_layer
@@ -242,6 +245,20 @@ class CLIPVisionTowerToMe(nn.Module):
             image_forward_outs = self.vision_tower.forward_features_all_layers(images.to(device=self.device, dtype=self.dtype))
             image_features, padding_masks, sizes, pos_trackings = self.feature_select(image_forward_outs)
             # image_features = image_features.to(images.dtype)
+        # Track compression ratio
+        original_tokens = 576  # 24x24 patches for ViT-L-14-336
+        if not isinstance(image_features, list):
+            merged_tokens = image_features.shape[1]
+            self._compression_stats['total_original'] += original_tokens
+            self._compression_stats['total_merged'] += merged_tokens
+            self._compression_stats['count'] += 1
+        else:
+            for feat in image_features:
+                merged_tokens = feat.shape[1]
+                self._compression_stats['total_original'] += original_tokens
+                self._compression_stats['total_merged'] += merged_tokens
+                self._compression_stats['count'] += 1
+        
         return image_features, padding_masks, sizes, pos_trackings
 
     @property
@@ -273,6 +290,34 @@ class CLIPVisionTowerToMe(nn.Module):
             return self.vision_tower.img_size // self.vision_tower.patch_size
         else:
             return self.vision_tower.patch_embed.img_size // self.vision_tower.patch_embed.patch_size
+
+    def get_compression_stats(self):
+        """Returns compression statistics: avg compression ratio and token counts."""
+        if self._compression_stats['count'] == 0:
+            return {'avg_compression_ratio': 0.0, 'avg_merged_tokens': 0, 'original_tokens': 576, 'sample_count': 0}
+        avg_merged = self._compression_stats['total_merged'] / self._compression_stats['count']
+        avg_ratio = avg_merged / 576 * 100  # percentage of original tokens remaining
+        return {
+            'avg_compression_ratio': round(100 - avg_ratio, 2),  # percentage compressed
+            'avg_merged_tokens': round(avg_merged, 1),
+            'original_tokens': 576,
+            'sample_count': self._compression_stats['count']
+        }
+    
+    def reset_compression_stats(self):
+        """Resets compression statistics."""
+        self._compression_stats = {'total_original': 0, 'total_merged': 0, 'count': 0}
+    
+    def print_compression_stats(self):
+        """Prints compression statistics summary."""
+        stats = self.get_compression_stats()
+        print(f"\n=== DToMe Compression Stats ===")
+        print(f"Samples processed: {stats['sample_count']}")
+        print(f"Original tokens: {stats['original_tokens']}")
+        print(f"Avg merged tokens: {stats['avg_merged_tokens']}")
+        print(f"Avg compression ratio: {stats['avg_compression_ratio']}%")
+        print(f"================================\n")
+        return stats
 
     @property
     def num_patches(self):
