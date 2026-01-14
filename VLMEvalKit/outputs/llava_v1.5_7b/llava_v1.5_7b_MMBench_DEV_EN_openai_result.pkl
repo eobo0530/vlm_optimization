@@ -1,1 +1,0 @@
-/home/user/vlm_opt_linux/VLMEvalKit/./outputs/llava_v1.5_7b/T20260108_Gb8faa135/llava_v1.5_7b_MMBench_DEV_EN_openai_result.pkl

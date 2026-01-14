@@ -178,6 +178,9 @@ def main():
         for p in prompt_struct:
             if p['type'] == 'image':
                 img_path = p['value']
+                if "LMUData" in img_path:
+                    img_path = img_path.replace("../../LMUData", "/home/user/LMUData")
+
                 # Try to handle relative path from perf_data root if needed, 
                 # but standard benchmark scripts usually expect correct paths or relative to CWD.
                 # Assuming inputs are correct absolute paths or relative to execution dir.

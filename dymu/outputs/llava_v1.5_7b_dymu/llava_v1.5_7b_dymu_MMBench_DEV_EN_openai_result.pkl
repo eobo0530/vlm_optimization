@@ -1,0 +1,1 @@
+/home/user/vlm_opt_linux/dymu/./outputs/llava_v1.5_7b_dymu/T20260112_G08aeab2d/llava_v1.5_7b_dymu_MMBench_DEV_EN_openai_result.pkl

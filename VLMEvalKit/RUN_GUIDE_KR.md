@@ -58,13 +58,13 @@ LLaVA v1.5 7B 모델을 기준으로 합니다.
 
 ```bash
 # MMBench_DEV_EN 데이터셋 평가
-torchrun --nproc_per_node=1 run.py \
+PYTHONPATH=../LLaVA:$PYTHONPATH torchrun --nproc_per_node=1 run.py \
   --data MMBench_DEV_EN \
   --model llava_v1.5_7b \
   --verbose
 
 # COCO 데이터셋 (Image Captioning) 평가
-torchrun --nproc_per_node=1 run.py \
+PYTHONPATH=../LLaVA:$PYTHONPATH torchrun --nproc_per_node=1 run.py \
   --data COCO_VAL \
   --model llava_v1.5_7b \
   --verbose

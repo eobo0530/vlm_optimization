@@ -11,6 +11,8 @@ class CLIPVisionTower(nn.Module):
         self.is_loaded = False
 
         self.vision_tower_name = vision_tower
+        if (self.vision_tower_name == "ViT-L-14-336-tome-72out" or self.vision_tower_name == "checkpoints/threshold_checkpoints/ViT-L-14-336-tome-72out.pth") and not hasattr(args, "tome_kwargs"):
+            self.vision_tower_name = "openai/clip-vit-large-patch14-336"
         self.select_layer = args.mm_vision_select_layer
         self.select_feature = getattr(args, 'mm_vision_select_feature', 'patch')
 

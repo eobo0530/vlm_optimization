@@ -166,6 +166,10 @@ def main(args):
         for p in prompt_struct:
             if p['type'] == 'image':
                 img_path = p['value']
+                if "LMUData" in img_path:
+                    # Fix path for local environment
+                    img_path = img_path.replace("../../LMUData", "/home/user/LMUData")
+                
                 # Check absolute vs relative
                 if not os.path.isabs(img_path):
                      # Assume relative to VLMEvalKit root (CWD in typical usage)
