@@ -1,0 +1,18 @@
+{
+    "model_path": "liuhaotian/llava-v1.5-7b",
+    "model_name": "llava-1.5-7b-fastv",
+    "use_fast_v": true,
+    "fast_v_inplace": false,
+    "fast_v_sys_length": 35,
+    "fast_v_image_token_length": 576,
+    "fast_v_attention_rank": 100,
+    "fast_v_agg_layer": 3,
+    "data": [
+        "MMBench_DEV_EN_V11",
+        "COCO_VAL"
+    ],
+    "work_dir": "./outputs_fastv",
+    "mode": "all",
+    "verbose": true,
+    "reuse": false
+}
