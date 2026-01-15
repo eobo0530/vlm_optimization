@@ -200,7 +200,10 @@ class LLaVA(BaseModel):
         else:
             image_tensor = None
 
-        prompt = self.system_prompt + "USER: " + content + " ASSISTANT: "
+        if dataset == 'COCO_VAL':
+            prompt = "USER: " + content + " Please describe this image concisely. ASSISTANT:"
+        else:
+            prompt = self.system_prompt + "USER: " + content + " ASSISTANT: "
 
         input_ids = (
             tokenizer_image_token(

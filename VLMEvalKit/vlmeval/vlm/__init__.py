@@ -1,3 +1,39 @@
+import sys
+import os
+
+# FastV Path Injection: Baseline and FastV both need the patched transformers
+# to correctly handle LLaVA's extended vocabulary (IndexError fix).
+FASTV_TRANSFORMERS_PATH = "/home/aips/FastV/src/transformers/src"
+FASTV_SRC_PATH = "/home/aips/FastV/src"
+
+if os.environ.get('FASTV_DISABLE_PATH_HACK', '0') == '0':
+    # STEP 1: Remove all existing transformers paths from sys.path
+    sys.path = [p for p in sys.path if 'site-packages' not in p or 'transformers' not in p]
+    
+    # STEP 2: Insert FastV paths at the very beginning
+    if FASTV_TRANSFORMERS_PATH not in sys.path:
+        sys.path.insert(0, FASTV_TRANSFORMERS_PATH)
+    if FASTV_SRC_PATH not in sys.path:
+        sys.path.insert(0, FASTV_SRC_PATH)
+    
+    # STEP 3: Force reload transformers if it's already imported
+    if 'transformers' in sys.modules:
+        to_remove = [k for k in sys.modules.keys() if k.startswith('transformers')]
+        for k in to_remove:
+            del sys.modules[k]
+    
+    # STEP 4: Verbose check to confirm FastV transformers is loaded
+    import transformers
+    expected_path = "/home/aips/FastV/src/transformers/src/transformers/__init__.py"
+    if transformers.__file__ != expected_path:
+        raise RuntimeError(
+            f"❌ CRITICAL: Wrong transformers library loaded!\n"
+            f"   Expected: {expected_path}\n"
+            f"   Got: {transformers.__file__}\n"
+            f"   This will cause IndexError for baseline LLaVA!"
+        )
+    print(f"[{os.getpid()}] ✅ Transformers initialized from: {transformers.__file__}")
+
 import torch
 
 torch.set_grad_enabled(False)
@@ -5,7 +41,11 @@ torch.manual_seed(1234)
 from .aria import Aria
 from .base import BaseModel
 from .hawk_vl import HawkVL
-from .thyme import Thyme
+try:
+    from .thyme import Thyme
+except (ImportError, ModuleNotFoundError):
+    # Skip Thyme if transformers version is incompatible (requires cache_utils)
+    pass
 from .cogvlm import CogVlm, GLM4v, GLMThinking
 from .emu import Emu, Emu3_chat, Emu3_gen
 from .eagle_x import Eagle
@@ -21,6 +61,7 @@ from .llava import (
     LLaVA_OneVision,
     LLaVA_OneVision_HF,
 )
+from .fastv_llava import FastVLLaVA
 from .vita import VITA, VITAQwen2
 from .long_vita import LongVITA
 from .minicpm_v import MiniCPM_V, MiniCPM_Llama3_V, MiniCPM_V_2_6, MiniCPM_o_2_6, MiniCPM_V_4, MiniCPM_V_4_5
@@ -114,5 +155,9 @@ from .keye_vlm import KeyeChat
 from .qianfan_vl import Qianfan_VL
 from .logics import Logics_Thinking
 from .cosmos import Cosmos
-from .liquid import LFM2VL
+try:
+    from .liquid import LFM2VL
+except (ImportError, ModuleNotFoundError):
+    # Skip liquid if transformers version is incompatible (requires AutoModelForImageTextToText)
+    pass
 from .insight_v import InsightV

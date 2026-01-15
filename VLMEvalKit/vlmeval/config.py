@@ -744,12 +744,13 @@ qwen_series = {
     "minimonkey": partial(MiniMonkey, model_path="mx262/MiniMonkey"),
 }
 
-thyme_series = {
-    "Thyme-7B": partial(Thyme, model_path="Kwai-Keye/Thyme-RL")
-}
+# thyme_series = {
+#     "Thyme-7B": partial(Thyme, model_path="Kwai-Keye/Thyme-RL")
+# }
 
 llava_series = {
     "llava_v1.5_7b": partial(LLaVA, model_path="liuhaotian/llava-v1.5-7b"),
+    "llava_v1.5_7b_64": partial(LLaVA, model_path="liuhaotian/llava-v1.5-7b", max_new_tokens=64),
     "llava_v1.5_13b": partial(LLaVA, model_path="liuhaotian/llava-v1.5-13b"),
     "llava_v1_7b": partial(LLaVA, model_path=LLAVA_V1_7B_MODEL_PTH),
     "sharegpt4v_7b": partial(LLaVA, model_path="Lin-Chen/ShareGPT4V-7B"),
@@ -814,6 +815,29 @@ llava_series = {
     ),
     "llava_video_qwen2_72b": partial(
         LLaVA_OneVision, model_path="lmms-lab/LLaVA-Video-72B-Qwen2"
+    ),
+    # FastV-enabled LLaVA models
+    "llava_v1.5_7b_fastv": partial(
+        FastVLLaVA,
+        model_path="liuhaotian/llava-v1.5-7b",
+        use_fast_v=True,
+        fast_v_inplace=False,
+        fast_v_attention_rank=288,
+    ),
+    "llava_v1.5_7b_fastv_64": partial(
+        FastVLLaVA,
+        model_path="liuhaotian/llava-v1.5-7b",
+        use_fast_v=True,
+        fast_v_inplace=False,
+        fast_v_attention_rank=288,
+        max_new_tokens=64,
+    ),
+    "llava_v1.5_13b_fastv": partial(
+        FastVLLaVA,
+        model_path="liuhaotian/llava-v1.5-13b",
+        use_fast_v=True,
+        fast_v_inplace=False,
+        fast_v_attention_rank=100,
     ),
 }
 
@@ -1976,9 +2000,9 @@ qianfanvl_series = {
 }
 
 lfm2vl_series = {
-    "LFM2-VL-450M": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-450M"),
-    "LFM2-VL-1.6B": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-1.6B"),
-    "LFM2-VL-3B": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-3B"),
+#     "LFM2-VL-450M": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-450M"),
+#     "LFM2-VL-1.6B": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-1.6B"),
+#     "LFM2-VL-3B": partial(LFM2VL, model_path="LiquidAI/LFM2-VL-3B"),
 }
 
 internvl_groups = [
@@ -2011,8 +2035,8 @@ model_groups = [
     ross_series, emu_series, ola_series, ursa_series, gemma_series,
     long_vita_series, ristretto_series, kimi_series, aguvis_series, hawkvl_series,
     flash_vl, kimi_vllm_series, oryx_series, treevgr_series, varco_vision_series, qtunevl_series, 
-    xvl_series, thyme_series, logics_series, cosmos_series, keye_series, qianfanvl_series, 
-    lfm2vl_series, rbdashmm_api_series_lmdeploy, interns1_series, insight_v_series
+    xvl_series, # thyme_series, logics_series, cosmos_series, keye_series, qianfanvl_series, 
+    # lfm2vl_series, rbdashmm_api_series_lmdeploy, interns1_series, insight_v_series
 ]
 
 for grp in model_groups:
