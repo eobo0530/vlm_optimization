@@ -51,10 +51,7 @@ class ImageCaptionDataset(ImageBaseDataset):
     def load_data(self, dataset):
         data = super().load_data(dataset)
         if 'question' not in data:
-            data['question'] = [(
-                'Please describe this image in general. Directly provide the description, '
-                'do not include prefix like "This image depicts". '
-            )] * len(data)
+            data['question'] = [('Describe the image.')] * len(data)
         return data
 
     # It returns a dictionary of scores

@@ -40,14 +40,17 @@ class LLaVA(BaseModel):
             model_name = get_model_name_from_path(model_path)
 
         try:
+            load_kwargs = dict(
+                model_path=model_path,
+                model_base=None,
+                model_name=model_name,
+                device_map="cpu"
+            )
+            if "tome_kwargs" in kwargs:
+                load_kwargs["tome_kwargs"] = kwargs["tome_kwargs"]
+
             self.tokenizer, self.model, self.image_processor, self.context_len = (
-                load_pretrained_model(
-                    model_path=model_path,
-                    model_base=None,
-                    model_name=model_name,
-                    device_map="cpu",
-                    tome_kwargs=kwargs.get("tome_kwargs", None)
-                )
+                load_pretrained_model(**load_kwargs)
             )
         except Exception as err:
             if "ShareGPT4V" in model_path:
@@ -66,8 +69,8 @@ class LLaVA(BaseModel):
         self.conv_mode = "llava_v1"
 
         kwargs_default = dict(
-            do_sample=False,
-            temperature=0,
+            do_sample=True,
+            temperature=0.2,
             max_new_tokens=2048,
             top_p=None,
             num_beams=1,
@@ -127,7 +130,7 @@ class LLaVA(BaseModel):
             if item["type"] == "text":
                 text += item["value"]
             elif item["type"] == "image":
-                text += " <image> "
+                text += " <image>\n"
                 images.append(item["value"])
         return text, images
 
@@ -188,8 +191,11 @@ class LLaVA(BaseModel):
         )
         from llava.constants import IMAGE_TOKEN_INDEX
 
+        from llava.conversation import conv_templates
+
         # Support interleave text and image
         content, images = self.concat_tilist(message)
+        content = content.strip()
 
         images = [Image.open(s).convert("RGB") for s in images]
         args = abstractproperty()
@@ -201,7 +207,11 @@ class LLaVA(BaseModel):
         else:
             image_tensor = None
 
-        prompt = self.system_prompt + "USER: " + content + " ASSISTANT: "
+        conv = conv_templates[self.conv_mode].copy()
+        conv.system = self.system_prompt
+        conv.append_message(conv.roles[0], content)
+        conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
 
         input_ids = (
             tokenizer_image_token(
