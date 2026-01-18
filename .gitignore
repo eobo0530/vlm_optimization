@@ -15,3 +15,4 @@ venv.bak/
 *.nsys-rep
 *.sqlite
 *.qslrep
+checkpoints/

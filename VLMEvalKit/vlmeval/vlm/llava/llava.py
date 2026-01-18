@@ -174,6 +174,11 @@ class LLaVA(BaseModel):
                 stopping_criteria=[stopping_criteria],
                 **self.kwargs,
             )
+        # Filter negative tokens (like IMAGE_TOKEN_INDEX = -200) and also out of range tokens
+        v_size = len(self.tokenizer)
+        if torch.any(output_ids >= v_size) or torch.any(output_ids < 0):
+             output_ids = torch.clamp(output_ids, min=0, max=v_size - 1)
+             
         output = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[
             0
         ].strip()

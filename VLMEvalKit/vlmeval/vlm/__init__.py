@@ -1,10 +1,10 @@
 import sys
 import os
 
-# FastV Path Injection: Baseline and FastV both need the patched transformers
-# to correctly handle LLaVA's extended vocabulary (IndexError fix).
-FASTV_TRANSFORMERS_PATH = "/home/aips/FastV/src/transformers/src"
-FASTV_SRC_PATH = "/home/aips/FastV/src"
+# FastV & DyMU Path Injection
+FASTV_TRANSFORMERS_PATH = "/home/aips/vlm_optimization/FastV/src/transformers/src"
+FASTV_SRC_PATH = "/home/aips/vlm_optimization/FastV/src"
+DYMU_SRC_PATH = "/home/aips/vlm_optimization/dymu/src"
 
 if os.environ.get('FASTV_DISABLE_PATH_HACK', '0') == '0':
     # STEP 1: Remove all existing transformers paths from sys.path
@@ -15,6 +15,8 @@ if os.environ.get('FASTV_DISABLE_PATH_HACK', '0') == '0':
         sys.path.insert(0, FASTV_TRANSFORMERS_PATH)
     if FASTV_SRC_PATH not in sys.path:
         sys.path.insert(0, FASTV_SRC_PATH)
+    if DYMU_SRC_PATH not in sys.path:
+        sys.path.insert(0, DYMU_SRC_PATH)
     
     # STEP 3: Force reload transformers if it's already imported
     if 'transformers' in sys.modules:
@@ -24,7 +26,7 @@ if os.environ.get('FASTV_DISABLE_PATH_HACK', '0') == '0':
     
     # STEP 4: Verbose check to confirm FastV transformers is loaded
     import transformers
-    expected_path = "/home/aips/FastV/src/transformers/src/transformers/__init__.py"
+    expected_path = "/home/aips/vlm_optimization/FastV/src/transformers/src/transformers/__init__.py"
     if transformers.__file__ != expected_path:
         raise RuntimeError(
             f"❌ CRITICAL: Wrong transformers library loaded!\n"
@@ -62,6 +64,7 @@ from .llava import (
     LLaVA_OneVision_HF,
 )
 from .fastv_llava import FastVLLaVA
+from .hybrid_llava import HybridLLaVA
 from .vita import VITA, VITAQwen2
 from .long_vita import LongVITA
 from .minicpm_v import MiniCPM_V, MiniCPM_Llama3_V, MiniCPM_V_2_6, MiniCPM_o_2_6, MiniCPM_V_4, MiniCPM_V_4_5

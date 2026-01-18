@@ -201,7 +201,7 @@ class LlamaTokenizer(PreTrainedTokenizer):
 
     def _convert_id_to_token(self, index):
         """Converts an index (integer) in a token (str) using the vocab."""
-        if index < self.vocab_size:
+        if 0 <= index < self.vocab_size:
             return self.sp_model.IdToPiece(index)
         return self.added_tokens_decoder.get(index, self.unk_token)
 

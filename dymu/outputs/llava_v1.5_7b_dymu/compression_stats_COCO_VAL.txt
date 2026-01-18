@@ -1,0 +1,4 @@
+Samples: 5000
+Avg Compression Ratio: 83.0%
+Avg Merged Tokens: 97.9/576
+Last Updated: samples=5000
