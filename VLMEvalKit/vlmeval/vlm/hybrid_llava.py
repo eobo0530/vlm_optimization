@@ -21,18 +21,22 @@ class HybridLLaVA(LLaVA):
         self.model.config.use_fast_v = kwargs.get('use_fast_v', True)
         self.model.config.fast_v_inplace = kwargs.get('fast_v_inplace', True)
         self.model.config.fast_v_agg_layer = kwargs.get('fast_v_agg_layer', 3)
-        self.model.config.fast_v_rank = kwargs.get('fast_v_rank', 288)
+        self.model.config.fast_v_attention_rank = kwargs.get('fast_v_rank', 288)  # Correct attribute name
+        self.model.config.fast_v_rank = kwargs.get('fast_v_rank', 288)  # Keep for backwards compat
         
         # Align FastV with DyMU's merged token count
         # 576 -> 72 (if r=504)
         # We use dymu_n_un if it was set in config, otherwise default to 72
         self.model.config.fast_v_image_token_length = getattr(self.model.config, 'dymu_n_un', 72)
         
-        # Force output_attentions for FastV aggregation
+        # System prompt length (before image tokens). Default 35 for typical LLaVA prompts.
+        self.model.config.fast_v_sys_length = kwargs.get('fast_v_sys_length', 35)
+        
+        # Enable output_attentions for FastV aggregation layer to compute attention weights
         self.model.config.output_attentions = True
         
         if self.model.config.use_fast_v:
-            print(f"Hybrid: FastV enabled (rank={self.model.config.fast_v_rank}, image_len={self.model.config.fast_v_image_token_length})")
+            print(f"Hybrid: FastV enabled (rank={self.model.config.fast_v_attention_rank}, image_len={self.model.config.fast_v_image_token_length}, sys_len={self.model.config.fast_v_sys_length})")
         else:
             print("Hybrid: FastV disabled")
             

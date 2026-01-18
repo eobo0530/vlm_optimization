@@ -51,6 +51,10 @@ CUDA_VISIBLE_DEVICES=1 python VLMEvalKit/run.py \
     --verbose
 ```
 
+export PYTHONPATH=$PYTHONPATH:$PWD/FastV/src/LLaVA
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/wsl/lib
+CUDA_VISIBLE_DEVICES=0 python VLMEvalKit/run.py --data COCO_VAL --model llava_v1.5_7b_hybrid --verbose
+ㅇ
 ---
 > [!NOTE]
 > `checkpoints/` 폴더는 용량 문제로 Git 업로드에서 제외되었습니다. 모델 가중치 파일은 별도로 관리해 주시기 바랍니다.

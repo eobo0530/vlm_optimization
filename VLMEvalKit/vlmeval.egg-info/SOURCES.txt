@@ -274,9 +274,11 @@ vlmeval/vlm/deepseek_vl2.py
 vlmeval/vlm/eagle_x.py
 vlmeval/vlm/emu.py
 vlmeval/vlm/falcon_vlm.py
+vlmeval/vlm/fastv_llava.py
 vlmeval/vlm/flash_vl.py
 vlmeval/vlm/gemma.py
 vlmeval/vlm/h2ovl_mississippi.py
+vlmeval/vlm/hybrid_llava.py
 vlmeval/vlm/idefics.py
 vlmeval/vlm/insight_v.py
 vlmeval/vlm/instructblip.py

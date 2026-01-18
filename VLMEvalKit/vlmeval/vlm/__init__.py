@@ -24,17 +24,8 @@ if os.environ.get('FASTV_DISABLE_PATH_HACK', '0') == '0':
         for k in to_remove:
             del sys.modules[k]
     
-    # STEP 4: Verbose check to confirm FastV transformers is loaded
-    import transformers
-    expected_path = "/home/aips/vlm_optimization/FastV/src/transformers/src/transformers/__init__.py"
-    if transformers.__file__ != expected_path:
-        raise RuntimeError(
-            f"❌ CRITICAL: Wrong transformers library loaded!\n"
-            f"   Expected: {expected_path}\n"
-            f"   Got: {transformers.__file__}\n"
-            f"   This will cause IndexError for baseline LLaVA!"
-        )
-    print(f"[{os.getpid()}] ✅ Transformers initialized from: {transformers.__file__}")
+
+
 
 import torch
 

@@ -1,0 +1,20 @@
+/home/user/anaconda3/envs/vlm_hybrid/lib/python3.10/site-packages/torch/_utils.py:776: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  return self.fget.__get__(instance, owner)()
+WARNING:root:Incompatible keys: <All keys matched successfully>
+/home/user/anaconda3/envs/vlm_hybrid/lib/python3.10/site-packages/huggingface_hub/file_download.py:1150: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+You are using a model of type llava to instantiate a model of type llava_llama. This is not supported for all configurations of models and can yield errors.
+Loading thresholds from /home/user/vlm_hybrid/vlm_optimization/microbench/../dymu/checkpoints/threshold_checkpoints/ViT-L-14-336-tome-72out.pth
+Model cfg: {'embed_dim': 768, 'quick_gelu': True, 'vision_cfg': {'image_size': 336, 'layers': 24, 'width': 1024, 'patch_size': 14, 'tome_cfg': {'r_total': 504, 'merge_mode': 'batch_level', 'r_schedule': 'constant'}}, 'text_cfg': {'context_length': 77, 'vocab_size': 49408, 'width': 768, 'heads': 12, 'layers': 12}}
+creating ToMEOpenAIVisionTransformer using ToMe config: merge_mode=batch_level, r_total=504, r_schedule=constant, {}
+set total avg remove token nums each layer as:  [21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21]
+merge mode:  batch_level
+attn_pool: None
+pool_type: tok
+Loaded DyMU thresholds: 24 layers
+Loading model: liuhaotian/llava-v1.5-7b
+Loading checkpoint shards:   0%|          | 0/2 [00:00<?, ?it/s]Loading checkpoint shards:  50%|█████     | 1/2 [00:06<00:06,  6.34s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:07<00:00,  3.58s/it]Loading checkpoint shards: 100%|██████████| 2/2 [00:07<00:00,  3.99s/it]
+🚀 FastV enabled: K=288, R=3, image_len=72
+Loaded 500 items from perf_data/coco_val_500.json
+Limiting to 3 samples
+Hybrid Benchmark:   0%|          | 0/3 [00:00<?, ?it/s]Could not load library libcudnn_cnn_infer.so.8. Error: libcuda.so: cannot open shared object file: No such file or directory

@@ -27,8 +27,7 @@ class LLaVA(BaseModel):
 
         assert osp.exists(model_path) or splitlen(model_path) == 2
         self.system_prompt = (
-            "A chat between a curious human and an artificial intelligence assistant. "
-            "The assistant gives helpful, detailed, and polite answers to the human's questions. "
+            "You are an image captioning model. Output one concise sentence."
         )
         self.stop_str = "</s>"
 
@@ -67,9 +66,9 @@ class LLaVA(BaseModel):
         kwargs_default = dict(
             do_sample=False,
             temperature=0,
-            max_new_tokens=2048,
+            max_new_tokens=64,
             top_p=None,
-            num_beams=1,
+            num_beams=5,
             use_cache=True,
         )  # noqa E501
         kwargs_default.update(kwargs)
@@ -126,7 +125,7 @@ class LLaVA(BaseModel):
             if item["type"] == "text":
                 text += item["value"]
             elif item["type"] == "image":
-                text += " <image> "
+                text += " <image>\n"
                 images.append(item["value"])
         return text, images
 
@@ -192,8 +191,11 @@ class LLaVA(BaseModel):
         )
         from llava.constants import IMAGE_TOKEN_INDEX
 
+        from llava.conversation import conv_templates
+
         # Support interleave text and image
         content, images = self.concat_tilist(message)
+        content = content.strip()
 
         images = [Image.open(s).convert("RGB") for s in images]
         args = abstractproperty()
@@ -205,10 +207,11 @@ class LLaVA(BaseModel):
         else:
             image_tensor = None
 
-        if dataset == 'COCO_VAL':
-            prompt = "USER: " + content + " Please describe this image concisely. ASSISTANT:"
-        else:
-            prompt = self.system_prompt + "USER: " + content + " ASSISTANT: "
+        conv = conv_templates[self.conv_mode].copy()
+        conv.system = self.system_prompt
+        conv.append_message(conv.roles[0], content)
+        conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
 
         input_ids = (
             tokenizer_image_token(
@@ -228,6 +231,11 @@ class LLaVA(BaseModel):
                 stopping_criteria=[stopping_criteria],
                 **self.kwargs,
             )
+
+        # Filter negative tokens (like IMAGE_TOKEN_INDEX = -200) and also out of range tokens
+        v_size = len(self.tokenizer)
+        if torch.any(output_ids >= v_size) or torch.any(output_ids < 0):
+             output_ids = torch.clamp(output_ids, min=0, max=v_size - 1)
 
         output = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[
             0
