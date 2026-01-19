@@ -1,21 +1,63 @@
 import torch
 import torch.nn as nn
+import os
 from .llava.llava import LLaVA
 from ..smp import *
 from ..dataset import build_dataset
+
+# Default threshold checkpoint path for DyMU
+DEFAULT_THRESHOLD_PATH = "/home/user/vlm_hybrid/vlm_optimization/dymu/checkpoints/threshold_checkpoints/ViT-L-14-336-tome-72out.pth"
+
+def find_thresholds(threshold_finding_checkpoint):
+    """Load learned thresholds from a DyMU checkpoint."""
+    import open_clip
+    print(f"Loading DyMU thresholds from {threshold_finding_checkpoint}")
+    model, _, _ = open_clip.create_model_and_transforms(
+        "ViT-L-14-336-tome-72out", 
+        pretrained=threshold_finding_checkpoint
+    )
+    tome_vision_encoder = model.visual.trunk if hasattr(model.visual, "trunk") else model.visual
+    blocks = tome_vision_encoder.blocks if hasattr(tome_vision_encoder, "blocks") else tome_vision_encoder.transformer.resblocks
+    learned_thresholds = []
+    for i, block in enumerate(blocks):
+        learned_thresholds.append(block.threshold.item())
+    return learned_thresholds
 
 class HybridLLaVA(LLaVA):
     INTERLEAVE = False
 
     def __init__(self, model_path='liuhaotian/llava-v1.5-7b', **kwargs):
-        # Tome kwargs for DyMU
-        tome_kwargs = kwargs.pop('tome_kwargs', {
-            'r_total': 504,
-            'merge_mode': 'batch_level',
-            'r_schedule': 'constant'
-        })
+        # Load learned thresholds if checkpoint exists
+        threshold_path = kwargs.pop('threshold_path', DEFAULT_THRESHOLD_PATH)
+        
+        if threshold_path and os.path.exists(threshold_path):
+            learned_thresholds = find_thresholds(threshold_path)
+            tome_kwargs = {
+                'pretrained': 'openai',
+                'pretrained_origin_tag': 'openai',
+                'merge_mode': 'batch_level',
+                'repeat_merged_tokens': True,
+                'r_total': 504,
+                'specified_thresholds': learned_thresholds
+            }
+            print(f"Hybrid: Loaded {len(learned_thresholds)} DyMU thresholds from checkpoint")
+        else:
+            # Fallback to constant schedule if no checkpoint found
+            print(f"Warning: Threshold checkpoint not found at {threshold_path}, using constant schedule")
+            tome_kwargs = kwargs.pop('tome_kwargs', {
+                'pretrained': 'openai',
+                'pretrained_origin_tag': 'openai',
+                'r_total': 504,
+                'merge_mode': 'batch_level',
+                'r_schedule': 'constant',
+                'repeat_merged_tokens': False
+            })
         
         super().__init__(model_path=model_path, **kwargs)
+        
+        # num_beams will be set dynamically per-dataset in generate_inner:
+        # - COCO/captioning: num_beams=5 (quality matters, short prompts so still fast)
+        # - MMBench/MCQ: num_beams=1 (long prompts make beam search very slow)
         
         # FastV configuration
         self.model.config.use_fast_v = kwargs.get('use_fast_v', True)
@@ -32,16 +74,53 @@ class HybridLLaVA(LLaVA):
         # System prompt length (before image tokens). Default 35 for typical LLaVA prompts.
         self.model.config.fast_v_sys_length = kwargs.get('fast_v_sys_length', 35)
         
-        # Enable output_attentions for FastV aggregation layer to compute attention weights
-        self.model.config.output_attentions = True
+        # NOTE: Do NOT set config.output_attentions = True globally!
+        # The Conditional SDPA logic in LlamaModel.forward handles output_attentions
+        # per-layer (only layer AGG_LAYER-1 needs attention weights for FastV).
+        # Setting it globally forces ALL layers to use slow manual attention.
         
         if self.model.config.use_fast_v:
             print(f"Hybrid: FastV enabled (rank={self.model.config.fast_v_attention_rank}, image_len={self.model.config.fast_v_image_token_length}, sys_len={self.model.config.fast_v_sys_length})")
         else:
             print("Hybrid: FastV disabled")
             
+        # [Optimization Fix] Force replace vision tower with ToMe version (DyMU)
+        # Because LLaVA parent class and FastV builder do not handle tome_kwargs automatically.
+        from llava.model.multimodal_encoder.clip_encoder import CLIPVisionTowerToMe
+        vision_tower = self.model.get_vision_tower()
+        
+        if not isinstance(vision_tower, CLIPVisionTowerToMe):
+            print(f"Hybrid: Vanilla Vision Tower detected. Swapping to CLIPVisionTowerToMe via Hot-swap...")
+            
+            vision_tower_name = vision_tower.vision_tower_name
+            if "openai/clip-vit-large-patch14-336" in vision_tower_name:
+                vision_tower_name = "ViT-L-14-336-tome-72out"
+
+            # Create new ToMe tower
+            # CLIPVisionTowerToMe.__init__ does not accept kwargs, so we pass kwargs to load_model
+            new_tower = CLIPVisionTowerToMe(vision_tower_name, args=self.model.config, delay_load=True)
+            new_tower.load_model(device="cuda" if torch.cuda.is_available() else "cpu", dtype=self.model.dtype, **tome_kwargs)
+            
+            # Replace in model
+            self.model.model.vision_tower = new_tower
+            
+            # Update image_processor
+            self.image_processor = new_tower.image_processor
+            self.model.get_vision_tower().image_processor = new_tower.image_processor
+            print(f"Hybrid: DyMU Vision Tower injected successfully.")
+            
 
     def generate_inner(self, message, dataset=None):
+        from ..dataset import DATASET_TYPE
+        
+        # Dynamic num_beams based on dataset type
+        # MCQ datasets have long prompts -> beam search is very slow
+        # Caption datasets have short prompts -> beam search is acceptable
+        if dataset and DATASET_TYPE(dataset) == 'MCQ':
+            self.kwargs['num_beams'] = 1  # Greedy for MCQ (fast)
+        else:
+            self.kwargs['num_beams'] = 5  # Beam search for captioning (quality)
+        
         # Ensure output_attentions is passed through generate for the aggregation layer
         prompt, image_path = self.message_to_promptimg(message, dataset=dataset)
         
@@ -57,3 +136,4 @@ class HybridLLaVA(LLaVA):
             # But let's look at the tokenizer again
             print(f"IndexError caught! Tokenizer vocab size: {len(self.tokenizer)}")
             raise e
+

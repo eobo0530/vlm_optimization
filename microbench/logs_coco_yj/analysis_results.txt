@@ -1,0 +1,11 @@
+
+==================================================
+Analysis for: logs/hybrid_coco.txt
+Samples Processed: 500
+--------------------------------------------------
+Vision Latency:      24.90 ms (Avg) | 23.49 ms (P50)
+LLM Prefill:         39.20 ms (Avg) | 39.55 ms (P50)
+Vision + Prefill:    64.10 ms (Avg)
+First Decode Step:   97.44 ms (Avg)
+Avg Decode Step:     27.52 ms (Avg) (All steps)
+==================================================

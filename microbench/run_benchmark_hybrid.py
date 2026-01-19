@@ -145,6 +145,8 @@ def main():
     parser.add_argument("--num-samples", type=int, default=None, help="Limit samples")
     parser.add_argument("--report-file", type=str, default=None, help="Path to save JSON report")
     
+    parser.add_argument("--num-beams", type=int, default=1, help="Beam search size")
+    
     # DyMU parameters
     parser.add_argument("--r-total", type=int, default=504, help="DyMU r_total (tokens to merge)")
     parser.add_argument("--threshold-path", type=str, 
@@ -174,7 +176,7 @@ def main():
         'pretrained': "openai",
         'pretrained_origin_tag': "openai",
         'merge_mode': "batch_level",
-        "repeat_merged_tokens": True,
+        "repeat_merged_tokens": False,
         "r_total": args.r_total,
         "specified_thresholds": learned_thresholds
     }
@@ -188,8 +190,33 @@ def main():
         model_base=None,
         model_name=model_name + "_tome_openai",  # Signals ToMe vision tower
         tome_kwargs=tome_kwargs,
-        device_map="cuda"
+        device_map="cuda",
+        torch_dtype=torch.float16
     )
+
+    # [Optimization Fix] Force replace vision tower with ToMe version if not loaded
+    # because FastV builder checks config string for "tome" which is missing in standard config.
+    from llava.model.multimodal_encoder.clip_encoder import CLIPVisionTowerToMe
+    vision_tower = model.get_vision_tower()
+    
+    if not isinstance(vision_tower, CLIPVisionTowerToMe):
+        print(f"⚠️  Vanilla Vision Tower detected ({type(vision_tower).__name__}). Swapping to CLIPVisionTowerToMe for DyMU...")
+        
+        vision_tower_name = vision_tower.vision_tower_name
+        if "openai/clip-vit-large-patch14-336" in vision_tower_name:
+            vision_tower_name = "ViT-L-14-336-tome-72out"
+            
+        # Create new ToMe tower
+        # CLIPVisionTowerToMe.__init__ does not accept kwargs, so we pass kwargs to load_model
+        new_tower = CLIPVisionTowerToMe(vision_tower_name, args=model.config, delay_load=True)
+        new_tower.load_model(device="cuda", dtype=model.dtype, **tome_kwargs)
+        
+        # Replace in model (LlavaLlamaModel -> vision_tower)
+        model.model.vision_tower = new_tower
+        
+        # Update image_processor
+        image_processor = new_tower.image_processor
+        print(f"✅ DyMU Vision Tower injected. Thresholds: {len(args.threshold_path) > 0}")
 
     # === 3. Setup FastV (applied after DyMU token merging) ===
     if args.use_fastv:
@@ -281,6 +308,17 @@ def main():
         input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda()
         input_len = input_ids.shape[1]
 
+        # [Profiling] Measure Pure Vision Latency
+        if image_tensor is not None:
+            torch.cuda.synchronize()
+            v_start = time.time()
+            with torch.inference_mode():
+                # This calls vision_tower + projector
+                _ = model.get_model().get_vision_tower()(image_tensor)
+            torch.cuda.synchronize()
+            v_end = time.time()
+            print(f"[Profiling] VisionStep: {(v_end - v_start) * 1000:.4f} ms")
+
         # Generation with timing
         torch.cuda.synchronize()
         t_start = time.time()
@@ -294,11 +332,27 @@ def main():
                 temperature=args.temperature if args.temperature > 0 else None,
                 max_new_tokens=args.max_new_tokens,
                 logits_processor=[timing_processor],
-                output_attentions=args.use_fastv  # For FastV
+                output_attentions=args.use_fastv,  # For FastV
+                num_beams=args.num_beams  # Use argument
             )
             
         torch.cuda.synchronize()
         t_end = time.time()
+
+        # [Profiling Output for analyze_logs.py]
+        if timing_processor.first_token_time:
+            # We map TTFT (Vision + Prefill + 1st Token) to "VisionStep" for compatibility
+            ttft_ms = (timing_processor.first_token_time - t_start) * 1000
+            print(f"[Profiling] TTFT (Vision+Prefill): {ttft_ms:.4f} ms")
+
+            # Output per-token latency
+            current_t = timing_processor.first_token_time
+            if hasattr(timing_processor, 'token_times') and timing_processor.token_times:
+                for t in timing_processor.token_times:
+                    if t <= current_t: continue
+                    step_ms = (t - current_t) * 1000
+                    print(f"[Profiling] LLM_Decode: {step_ms:.4f} ms")
+                    current_t = t
 
         # Calculate metrics
         e2e = t_end - t_start

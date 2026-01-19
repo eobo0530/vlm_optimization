@@ -1,0 +1,11 @@
+
+==================================================
+Analysis for: logs/hybrid_mmbench.txt
+Samples Processed: 4329
+--------------------------------------------------
+Vision Latency:      23.62 ms (Avg) | 22.98 ms (P50)
+LLM Prefill:         15.59 ms (Avg) | 14.81 ms (P50)
+Vision + Prefill:    39.21 ms (Avg)
+First Decode Step:   36.49 ms (Avg)
+Avg Decode Step:     24.11 ms (Avg) (All steps)
+==================================================

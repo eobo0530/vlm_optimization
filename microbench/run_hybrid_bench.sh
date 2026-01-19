@@ -7,6 +7,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Set LD_LIBRARY_PATH for WSL (fix libcuda.so not found)
+export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
+
 # Default dataset
 DATASET="${1:-coco}"
 NUM_SAMPLES="${2:-}"
@@ -16,10 +19,14 @@ if [ "$DATASET" = "coco" ]; then
     DATA_FILE="perf_data/coco_val_500.json"
     REPORT_FILE="reports/hybrid_coco.json"
     LOG_FILE="logs/hybrid_coco.txt"
+    MAX_NEW_TOKENS=64
+    NUM_BEAMS=5
 elif [ "$DATASET" = "mmbench" ]; then
     DATA_FILE="perf_data/mmbench_dev_en.json"
     REPORT_FILE="reports/hybrid_mmbench.json"
     LOG_FILE="logs/hybrid_mmbench.txt"
+    MAX_NEW_TOKENS=128
+    NUM_BEAMS=1
 else
     echo "Unknown dataset: $DATASET. Use 'coco' or 'mmbench'"
     exit 1
@@ -32,7 +39,7 @@ mkdir -p reports logs
 export PYTHONPATH="${SCRIPT_DIR}/../dymu/src:${SCRIPT_DIR}/../FastV/src/LLaVA:${PYTHONPATH}"
 
 # Build command
-CMD="python run_benchmark_hybrid.py \
+CMD="/home/user/anaconda3/envs/vlm_hybrid/bin/python run_benchmark_hybrid.py \
     --data-file $DATA_FILE \
     --model-path liuhaotian/llava-v1.5-7b \
     --report-file $REPORT_FILE \
@@ -40,7 +47,8 @@ CMD="python run_benchmark_hybrid.py \
     --fastv-k 288 \
     --fastv-r 3 \
     --r-total 504 \
-    --max-new-tokens 512 \
+    --max-new-tokens $MAX_NEW_TOKENS \
+    --num-beams $NUM_BEAMS \
     --temperature 0"
 
 if [ -n "$NUM_SAMPLES" ]; then

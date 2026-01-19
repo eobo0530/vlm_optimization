@@ -318,13 +318,9 @@ class LlamaAttention(nn.Module):
         # Fixed: use kv_seq_len instead of hardcoded 1000 to prevent IndexErrors on long sequences
         cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
         
-        # SAFETY: Ensure position_ids are within the range of cos/sin
-        if position_ids is not None:
-            max_pos = position_ids.max().item()
-            if max_pos >= cos.size(0):
-                # This should not happen if rotary_emb is called with kv_seq_len, 
-                # but adding as a last resort to prevent CUDA crash
-                cos, sin = self.rotary_emb(value_states, seq_len=max_pos + 1)
+        # Note: Removed expensive position_ids.max().item() check that caused GPU-CPU sync
+        # kv_seq_len already ensures rotary embeddings cover the required range
+
         
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
 
@@ -868,11 +864,13 @@ class LlamaModel(LlamaPreTrainedModel):
 
                 # print(idx,hidden_states.shape,new_attention_mask.shape,position_ids.shape)
 
-                # Conditional SDPA: Only request attention weights for layers <= AGG_LAYER
-                # This allows layers after AGG_LAYER to use fast SDPA
-                layer_output_attentions = output_attentions
-                if USE_FAST_V and idx > AGG_LAYER:
-                    layer_output_attentions = False  # Use SDPA for speed after aggregation
+                # Conditional SDPA: Only request attention weights for layer (AGG_LAYER - 1)
+                # FastV uses attention from layer 2 to make pruning decisions at layer 3
+                # All other layers can use fast SDPA
+                if USE_FAST_V and idx == AGG_LAYER - 1:
+                    layer_output_attentions = True  # Layer 2: manual attention for FastV
+                else:
+                    layer_output_attentions = False  # All other layers: fast SDPA
 
                 layer_outputs = decoder_layer(
                     hidden_states,
@@ -886,7 +884,7 @@ class LlamaModel(LlamaPreTrainedModel):
             hidden_states = layer_outputs[0]
 
             if use_cache:
-                next_decoder_cache += (layer_outputs[2 if output_attentions else 1],)
+                next_decoder_cache += (layer_outputs[-1],)
 
             if output_attentions:
                 all_self_attns += (layer_outputs[1],)
