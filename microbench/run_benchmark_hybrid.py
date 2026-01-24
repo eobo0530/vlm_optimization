@@ -227,10 +227,14 @@ def main():
         model.config.use_fast_v = True
         model.config.fast_v_inplace = True
         model.config.fast_v_sys_length = args.fastv_sys_length
-        model.config.fast_v_image_token_length = merged_token_count
+        model.config.fast_v_image_token_length = 576 # Set to max to cover dynamic DyMU output (96-152 tokens)
         model.config.fast_v_attention_rank = args.fastv_k
         model.config.fast_v_agg_layer = args.fastv_r
         model.config.output_attentions = True  # Required for FastV
+        
+        # Propagate config to model instance
+        if hasattr(model.model, 'reset_fastv'):
+            model.model.reset_fastv()
         
         print(f"🚀 FastV enabled: K={args.fastv_k}, R={args.fastv_r}, image_len={merged_token_count}")
     else:
@@ -272,7 +276,9 @@ def main():
                 
                 # Handle LMUData path
                 if "LMUData" in img_path:
-                    img_path = img_path.replace("../../LMUData", "/home/user/LMUData")
+                    # Use current user's home directory instead of hardcoded /home/user
+                    user_home = os.path.expanduser("~")
+                    img_path = img_path.replace("../../LMUData", os.path.join(user_home, "LMUData"))
                 
                 # Handle relative paths
                 if not os.path.isabs(img_path):

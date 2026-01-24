@@ -2,9 +2,9 @@ import sys
 import os
 
 # FastV & DyMU Path Injection
-FASTV_TRANSFORMERS_PATH = "/home/aips/vlm_optimization/FastV/src/transformers/src"
-FASTV_SRC_PATH = "/home/aips/vlm_optimization/FastV/src"
-DYMU_SRC_PATH = "/home/aips/vlm_optimization/dymu/src"
+FASTV_TRANSFORMERS_PATH = "/home/aips/vlm/FastV/src/transformers/src"
+FASTV_SRC_PATH = "/home/aips/vlm/FastV/src"
+DYMU_SRC_PATH = "/home/aips/vlm/dymu/src"
 
 if os.environ.get('FASTV_DISABLE_PATH_HACK', '0') == '0':
     # STEP 1: Remove all existing transformers paths from sys.path

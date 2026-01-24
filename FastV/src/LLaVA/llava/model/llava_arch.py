@@ -189,6 +189,8 @@ class LlavaMetaForCausalLM(ABC):
                 images = [x.unsqueeze(0) if x.ndim == 3 else x for x in images]
             concat_images = torch.cat([image for image in images], dim=0)
             image_features, padding_masks, sizes, pos_trackings = self.encode_images(concat_images) # size vector currently not used 
+            if image_features is not None:
+                print(f"[DEBUG] After DyMU: {image_features.shape[1]} visual tokens per image", flush=True)
 
             split_sizes = [image.shape[0] for image in images]
             image_features = torch.split(image_features, split_sizes, dim=0)
@@ -247,6 +249,8 @@ class LlavaMetaForCausalLM(ABC):
                 padding_masks = [None] * len(image_features)
         else:
             image_features, padding_masks, sizes, pos_trackings = self.encode_images(images)
+            if image_features is not None:
+                print(f"[DEBUG] After DyMU: {image_features.shape[1]} visual tokens per image", flush=True)
             # Converts to averages based on merging then ->
             # converts back to redundant tokens
             # ipdb.set_trace()
@@ -338,7 +342,7 @@ class LlavaMetaForCausalLM(ABC):
                             cur_image_features = cur_image_features[valid_indices]
                     cur_image_idx += 1
                     # ipdb.set_trace()
-                    new_impos.append([batch_idx, sum([len(emb) for emb in cur_new_input_embeds])])
+                    new_impos.append([batch_idx, sum([len(emb) for emb in cur_new_input_embeds]), cur_image_features.shape[0]])
                     cur_new_input_embeds.append(cur_image_features)
                     cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
 
@@ -434,6 +438,12 @@ class LlavaMetaForCausalLM(ABC):
         # convert the input_embeds to N_total length for easier handling of position_ids and later rope embeddings
         if mapping_indices is not None:
             new_input_embeds = new_input_embeds.index_select(dim=1, index=mapping_indices) # (B, N_un, D) -> (B, N_total, D)
+            if attention_mask is not None:
+                attention_mask = attention_mask.index_select(dim=1, index=mapping_indices)
+            if position_ids is not None:
+                position_ids = position_ids.index_select(dim=1, index=mapping_indices)
+            if new_labels is not None:
+                new_labels = new_labels.index_select(dim=1, index=mapping_indices)
 
         # compatible with orignal model
         if (not repeat_merged_tokens) and (sizes is None):

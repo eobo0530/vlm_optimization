@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # Set LD_LIBRARY_PATH for WSL (fix libcuda.so not found)
-export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
+# export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$LD_LIBRARY_PATH"
 
 # Default dataset
 DATASET="${1:-coco}"
@@ -20,7 +20,7 @@ if [ "$DATASET" = "coco" ]; then
     REPORT_FILE="reports/hybrid_coco.json"
     LOG_FILE="logs/hybrid_coco.txt"
     MAX_NEW_TOKENS=64
-    NUM_BEAMS=5
+    NUM_BEAMS=1
 elif [ "$DATASET" = "mmbench" ]; then
     DATA_FILE="perf_data/mmbench_dev_en.json"
     REPORT_FILE="reports/hybrid_mmbench.json"
@@ -35,18 +35,19 @@ fi
 # Create output directories
 mkdir -p reports logs
 
-# Set PYTHONPATH for LLaVA and DyMU imports
-export PYTHONPATH="${SCRIPT_DIR}/../dymu/src:${SCRIPT_DIR}/../FastV/src/LLaVA:${PYTHONPATH}"
+# Set PYTHONPATH for LLaVA, Transformers, and DyMU imports
+export PYTHONPATH="${SCRIPT_DIR}/../dymu/src:${SCRIPT_DIR}/../FastV/src/transformers/src:${SCRIPT_DIR}/../FastV/src/LLaVA:${PYTHONPATH}"
 
 # Build command
-CMD="/home/user/anaconda3/envs/vlm_hybrid/bin/python run_benchmark_hybrid.py \
+CMD="/home/aips/miniconda3/envs/vlm_hybrid/bin/python run_benchmark_hybrid.py \
     --data-file $DATA_FILE \
     --model-path liuhaotian/llava-v1.5-7b \
     --report-file $REPORT_FILE \
     --use-fastv \
-    --fastv-k 288 \
+    --fastv-k 72 \
     --fastv-r 3 \
     --r-total 504 \
+    --threshold-path /home/aips/vlm/checkpoints/threshold_checkpoints/ViT-L-14-336-tome-72out.pth \
     --max-new-tokens $MAX_NEW_TOKENS \
     --num-beams $NUM_BEAMS \
     --temperature 0"

@@ -310,16 +310,15 @@ class LlamaAttention(nn.Module):
         query_states = query_states.view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
         key_states = key_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         value_states = value_states.view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-
+        
         kv_seq_len = key_states.shape[-2]
         if past_key_value is not None:
             kv_seq_len += past_key_value[0].shape[-2]
         
-        # Fixed: use kv_seq_len instead of hardcoded 1000 to prevent IndexErrors on long sequences
-        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
-        
-        # Note: Removed expensive position_ids.max().item() check that caused GPU-CPU sync
-        # kv_seq_len already ensures rotary embeddings cover the required range
+        # FastV Fix: If pruning happened, kv_seq_len (number of tokens) is smaller than the max position index.
+        # We need to ensure rotary embeddings cover the actual positions in position_ids.
+        rope_seq_len = max(kv_seq_len, position_ids.max().item() + 1)
+        cos, sin = self.rotary_emb(value_states, seq_len=rope_seq_len)
 
         
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin, position_ids)
@@ -645,6 +644,7 @@ class LlamaModel(LlamaPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        im_pos: Optional[List] = None,
     ) -> Union[Tuple, BaseModelOutputWithPast]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -670,6 +670,11 @@ class LlamaModel(LlamaPreTrainedModel):
         if past_key_values is not None:
             past_key_values_length = past_key_values[0][0].shape[2]
             seq_length_with_past = seq_length_with_past + past_key_values_length
+        
+        # FastV Fix: If the incoming attention_mask is longer than our KV cache (due to pruning in prefill), trim it.
+        if attention_mask is not None and past_key_values is not None:
+            if attention_mask.shape[-1] > seq_length_with_past:
+                attention_mask = attention_mask[:, -seq_length_with_past:]
 
         if position_ids is None:
             device = input_ids.device if input_ids is not None else inputs_embeds.device
@@ -692,7 +697,6 @@ class LlamaModel(LlamaPreTrainedModel):
         )
 
         hidden_states = inputs_embeds
-
         if self.gradient_checkpointing and self.training:
             if use_cache:
                 logger.warning_once(
@@ -728,7 +732,7 @@ class LlamaModel(LlamaPreTrainedModel):
                 )
             else:
 
-                USE_FAST_V = self.use_fast_v and output_attentions
+                USE_FAST_V = self.use_fast_v and output_attentions and past_key_values is None
                 SYS_LENGTH= self.fast_v_sys_length
                 IMAGE_TOKEN_LENGTH = self.fast_v_image_token_length
                 ATTENTION_RANK = self.fast_v_attention_rank
@@ -781,6 +785,16 @@ class LlamaModel(LlamaPreTrainedModel):
                         new_seq_length = keep_indexs.shape[0]
                         # filter hidden states
                         hidden_states = hidden_states[:,keep_indexs,:]
+                        print(f"[DEBUG] FastV Pruning (Layer {idx}): {keep_indexs.shape[0]} tokens kept (Rank set to {ATTENTION_RANK})", flush=True)
+
+                        # FastV Fix: Prune KV cache of previous layers to maintain consistent sequence length across all layers
+                        if use_cache and next_decoder_cache is not None:
+                            new_cache = []
+                            for prev_kv in next_decoder_cache:
+                                # Each prev_kv is a tuple of (key_states, value_states)
+                                new_cache.append((prev_kv[0][:, :, keep_indexs, :], prev_kv[1][:, :, keep_indexs, :]))
+                            next_decoder_cache = tuple(new_cache)
+
                         # update position ids (explicitly expanding for stability if batching is attempted)
                         position_ids = keep_indexs.unsqueeze(0).expand(batch_size, -1)
                         # update attention mask
@@ -810,8 +824,15 @@ class LlamaModel(LlamaPreTrainedModel):
 
                             # SAFETY CHECK: Ensure boundaries are within sequence length
                             curr_len = last_layer_attention_avg_last_tok.size(0)
-                            image_start = min(SYS_LENGTH, curr_len)
-                            image_end = min(SYS_LENGTH + IMAGE_TOKEN_LENGTH, curr_len)
+                            if im_pos is not None:
+                                # im_pos: [[batch_idx, start, count], ...]
+                                # For now we assume batch_size=1 and single image per sample for compatibility
+                                image_start = im_pos[0][1]
+                                image_token_count = im_pos[0][2]
+                                image_end = image_start + image_token_count
+                            else:
+                                image_start = min(SYS_LENGTH, curr_len)
+                                image_end = min(SYS_LENGTH + IMAGE_TOKEN_LENGTH, curr_len)
 
                             # get the attention in image token
                             last_layer_attention_avg_last_tok_image = last_layer_attention_avg_last_tok[image_start:image_end]
@@ -951,6 +972,8 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
+        im_pos: Optional[List] = None,
+        **kwargs,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         r"""
         Args:
@@ -995,6 +1018,8 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            im_pos=im_pos,
+            **kwargs,
         )
 
         hidden_states = outputs[0]
@@ -1057,6 +1082,7 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
                 "past_key_values": past_key_values,
                 "use_cache": kwargs.get("use_cache"),
                 "attention_mask": attention_mask,
+                "im_pos": kwargs.get("im_pos"),
             }
         )
         return model_inputs

@@ -73,6 +73,7 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         images: Optional[torch.FloatTensor] = None,
         image_sizes: Optional[List[List[int]]] = None,
         return_dict: Optional[bool] = None,
+        im_pos: Optional[List] = None,
         **kwargs,
     ) -> Union[Tuple, CausalLMOutputWithPast]:
 
@@ -93,7 +94,10 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             past_key_values = result[3]
             inputs_embeds = result[4]
             labels = result[5]
-            # Extra DyMU values (result[6:9]) are ignored for now
+            im_pos = result[6]
+            # Extra DyMU values (result[7:9]) are ignored for now
+        else:
+            im_pos = kwargs.pop("im_pos", None)
 
         return super().forward(
             input_ids=input_ids,
@@ -106,6 +110,7 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
+            im_pos=im_pos,
             **kwargs
         )
 
@@ -138,14 +143,17 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             attention_mask = result[2]
             # result[3] is past_key_values (None for generation start)
             inputs_embeds = result[4]
+            im_pos = result[6]
             # result[5] is labels (not needed for generation)
         else:
             inputs_embeds = self.get_model().embed_tokens(inputs)
+            im_pos = None
 
         return super().generate(
             position_ids=position_ids,
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
+            im_pos=im_pos,
             **kwargs
         )
 

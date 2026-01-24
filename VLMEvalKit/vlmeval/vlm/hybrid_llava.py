@@ -6,7 +6,7 @@ from ..smp import *
 from ..dataset import build_dataset
 
 # Default threshold checkpoint path for DyMU
-DEFAULT_THRESHOLD_PATH = "/home/user/vlm_hybrid/vlm_optimization/dymu/checkpoints/threshold_checkpoints/ViT-L-14-336-tome-72out.pth"
+DEFAULT_THRESHOLD_PATH = "/home/aips/vlm/checkpoints/threshold_checkpoints/ViT-L-14-336-tome-72out.pth"
 
 def find_thresholds(threshold_finding_checkpoint):
     """Load learned thresholds from a DyMU checkpoint."""
@@ -50,7 +50,7 @@ class HybridLLaVA(LLaVA):
                 'r_total': 504,
                 'merge_mode': 'batch_level',
                 'r_schedule': 'constant',
-                'repeat_merged_tokens': False
+                'repeat_merged_tokens': True
             })
         
         super().__init__(model_path=model_path, **kwargs)
@@ -60,11 +60,14 @@ class HybridLLaVA(LLaVA):
         # - MMBench/MCQ: num_beams=1 (long prompts make beam search very slow)
         
         # FastV configuration
+        env_rank = os.environ.get('FASTV_K', None)
+        default_rank = int(env_rank) if env_rank is not None else 72
+
         self.model.config.use_fast_v = kwargs.get('use_fast_v', True)
         self.model.config.fast_v_inplace = kwargs.get('fast_v_inplace', True)
         self.model.config.fast_v_agg_layer = kwargs.get('fast_v_agg_layer', 3)
-        self.model.config.fast_v_attention_rank = kwargs.get('fast_v_rank', 288)  # Correct attribute name
-        self.model.config.fast_v_rank = kwargs.get('fast_v_rank', 288)  # Keep for backwards compat
+        self.model.config.fast_v_attention_rank = kwargs.get('fast_v_rank', default_rank)  # Correct attribute name
+        self.model.config.fast_v_rank = kwargs.get('fast_v_rank', default_rank)  # Keep for backwards compat
         
         # Align FastV with DyMU's merged token count
         # 576 -> 72 (if r=504)
