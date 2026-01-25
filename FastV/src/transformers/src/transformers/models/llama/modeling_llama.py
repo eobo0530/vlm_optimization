@@ -591,6 +591,7 @@ class LlamaModel(LlamaPreTrainedModel):
         self.fast_v_attention_rank = config.fast_v_attention_rank
         self.fast_v_agg_layer = config.fast_v_agg_layer
         self.fast_v_inplace = config.fast_v_inplace
+        self.pruned_count = 0
     
     def reset_fastv(self):
         self.use_fast_v = self.config.use_fast_v
@@ -599,6 +600,9 @@ class LlamaModel(LlamaPreTrainedModel):
         self.fast_v_attention_rank = self.config.fast_v_attention_rank
         self.fast_v_agg_layer = self.config.fast_v_agg_layer
         self.fast_v_inplace = self.config.fast_v_inplace
+        self.pruned_count = 0
+        for i, layer in enumerate(self.layers):
+            layer.self_attn.layer_idx = i
 
 
 
@@ -678,8 +682,11 @@ class LlamaModel(LlamaPreTrainedModel):
 
         if position_ids is None:
             device = input_ids.device if input_ids is not None else inputs_embeds.device
+            # FastV Fix: Add pruned_count to offset position_ids for RoPE stability during decoding
+            # pruned_count now includes both DyMU reduction and FastV pruning
+            offset = getattr(self, "pruned_count", 0)
             position_ids = torch.arange(
-                past_key_values_length, seq_length + past_key_values_length, dtype=torch.long, device=device
+                past_key_values_length + offset, seq_length + past_key_values_length + offset, dtype=torch.long, device=device
             )
             position_ids = position_ids.unsqueeze(0).view(-1, seq_length)
         else:
@@ -763,8 +770,12 @@ class LlamaModel(LlamaPreTrainedModel):
                         
                         # SAFETY CHECK: Ensure boundaries are within sequence length
                         curr_len = last_layer_attention_avg_last_tok.size(0)
-                        image_start = min(SYS_LENGTH, curr_len)
-                        image_end = min(SYS_LENGTH + IMAGE_TOKEN_LENGTH, curr_len)
+                        if im_pos is not None:
+                            image_start = im_pos[0][1]
+                            image_end = image_start + im_pos[0][2]
+                        else:
+                            image_start = min(SYS_LENGTH, curr_len)
+                            image_end = min(SYS_LENGTH + IMAGE_TOKEN_LENGTH, curr_len)
                         
                         # get the attention in image token
                         last_layer_attention_avg_last_tok_image = last_layer_attention_avg_last_tok[image_start:image_end]
@@ -785,7 +796,6 @@ class LlamaModel(LlamaPreTrainedModel):
                         new_seq_length = keep_indexs.shape[0]
                         # filter hidden states
                         hidden_states = hidden_states[:,keep_indexs,:]
-                        print(f"[DEBUG] FastV Pruning (Layer {idx}): {keep_indexs.shape[0]} tokens kept (Rank set to {ATTENTION_RANK})", flush=True)
 
                         # FastV Fix: Prune KV cache of previous layers to maintain consistent sequence length across all layers
                         if use_cache and next_decoder_cache is not None:
@@ -794,6 +804,11 @@ class LlamaModel(LlamaPreTrainedModel):
                                 # Each prev_kv is a tuple of (key_states, value_states)
                                 new_cache.append((prev_kv[0][:, :, keep_indexs, :], prev_kv[1][:, :, keep_indexs, :]))
                             next_decoder_cache = tuple(new_cache)
+                        
+                        # Store pruned count for future decoding steps to keep RoPE aligned
+                        last_logical_pos = position_ids[0, -1].item()
+                        next_physical_pos = next_decoder_cache[0][0].shape[2] # current cache len
+                        self.pruned_count = last_logical_pos + 1 - next_physical_pos
 
                         # update position ids (explicitly expanding for stability if batching is attempted)
                         position_ids = keep_indexs.unsqueeze(0).expand(batch_size, -1)
@@ -1063,13 +1078,22 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
             input_ids = input_ids[:, -1:]
 
         position_ids = kwargs.get("position_ids", None)
+        if past_key_values and position_ids is not None:
+            # Decoding step: trim position_ids to the last token if it's longer than current input
+            if position_ids.shape[-1] > input_ids.shape[-1]:
+                position_ids = position_ids[:, -input_ids.shape[-1]:]
+            # Note: We actually want LlamaModel.forward to recompute it using pruned_count 
+            # for RoPE alignment, so setting it to None here is often safer if it's provided.
+            # But let's try trimming first to see if it preserves value correctly.
+            # Actually, LlamaModel logic for position_ids when None is more robust for FastV.
+            position_ids = None 
+
         if attention_mask is not None and position_ids is None:
             # create position_ids on the fly for batch generation
             position_ids = attention_mask.long().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask == 0, 1)
             if past_key_values:
                 position_ids = position_ids[:, -1].unsqueeze(-1)
-
         # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
         if inputs_embeds is not None and past_key_values is None:
             model_inputs = {"inputs_embeds": inputs_embeds}

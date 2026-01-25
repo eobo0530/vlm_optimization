@@ -36,11 +36,11 @@ class HybridLLaVA(LLaVA):
                 'pretrained': 'openai',
                 'pretrained_origin_tag': 'openai',
                 'merge_mode': 'batch_level',
-                'repeat_merged_tokens': True,
+                'repeat_merged_tokens': False,  # Changed from True to False for logical mapping
                 'r_total': 504,
                 'specified_thresholds': learned_thresholds
             }
-            print(f"Hybrid: Loaded {len(learned_thresholds)} DyMU thresholds from checkpoint")
+            print(f"Hybrid: Loaded {len(learned_thresholds)} DyMU thresholds from checkpoint. Logical mapping enabled.")
         else:
             # Fallback to constant schedule if no checkpoint found
             print(f"Warning: Threshold checkpoint not found at {threshold_path}, using constant schedule")
@@ -50,10 +50,12 @@ class HybridLLaVA(LLaVA):
                 'r_total': 504,
                 'merge_mode': 'batch_level',
                 'r_schedule': 'constant',
-                'repeat_merged_tokens': True
+                'repeat_merged_tokens': False  # Changed from True to False for logical mapping
             })
         
         super().__init__(model_path=model_path, **kwargs)
+        
+        self.vtu_enabled = tome_kwargs.get('repeat_merged_tokens', True)
         
         # num_beams will be set dynamically per-dataset in generate_inner:
         # - COCO/captioning: num_beams=5 (quality matters, short prompts so still fast)
@@ -70,12 +72,27 @@ class HybridLLaVA(LLaVA):
         self.model.config.fast_v_rank = kwargs.get('fast_v_rank', default_rank)  # Keep for backwards compat
         
         # Align FastV with DyMU's merged token count
-        # 576 -> 72 (if r=504)
-        # We use dymu_n_un if it was set in config, otherwise default to 72
-        self.model.config.fast_v_image_token_length = getattr(self.model.config, 'dymu_n_un', 72)
+        # If repeat_merged_tokens is True (VTU ON), token count is 576
+        # If False (VTU OFF), token count is 72 (576 - 504)
+        if tome_kwargs.get('repeat_merged_tokens', True):
+            self.model.config.fast_v_image_token_length = 576
+        else:
+            self.model.config.fast_v_image_token_length = 72
         
         # System prompt length (before image tokens). Default 35 for typical LLaVA prompts.
         self.model.config.fast_v_sys_length = kwargs.get('fast_v_sys_length', 35)
+        
+        # Synchronize config to model instance (LlamaModel copies config in __init__)
+        if hasattr(self.model, 'model'):
+            llama_model = self.model.model
+            if hasattr(llama_model, 'reset_fastv'):
+                llama_model.reset_fastv()
+            else:
+                # Manual sync if reset_fastv doesn't exist
+                for attr in ['use_fast_v', 'fast_v_inplace', 'fast_v_agg_layer', 
+                            'fast_v_attention_rank', 'fast_v_sys_length', 'fast_v_image_token_length']:
+                    if hasattr(self.model.config, attr):
+                        setattr(llama_model, attr, getattr(self.model.config, attr))
         
         # NOTE: Do NOT set config.output_attentions = True globally!
         # The Conditional SDPA logic in LlamaModel.forward handles output_attentions
@@ -125,11 +142,19 @@ class HybridLLaVA(LLaVA):
             self.kwargs['num_beams'] = 5  # Beam search for captioning (quality)
         
         # Ensure output_attentions is passed through generate for the aggregation layer
-        prompt, image_path = self.message_to_promptimg(message, dataset=dataset)
+        # This is CRITICAL for FastV to work
+        self.kwargs['output_attentions'] = True
         
         # Reset FastV state machine for new generation
-        if hasattr(self.model, 'reset_fast_v'):
+        # Try both common naming conventions
+        if hasattr(self.model, 'reset_fastv'):
+            self.model.reset_fastv()
+        elif hasattr(self.model, 'model') and hasattr(self.model.model, 'reset_fastv'):
+            self.model.model.reset_fastv()
+        elif hasattr(self.model, 'reset_fast_v'):
             self.model.reset_fast_v()
+        
+        print(f"Hybrid: Generating with FASTV_K={self.model.config.fast_v_attention_rank}, Logical Mapping=ON, output_attentions={self.kwargs.get('output_attentions')}")
             
         try:
             output_ids = super().generate_inner(message, dataset=dataset)

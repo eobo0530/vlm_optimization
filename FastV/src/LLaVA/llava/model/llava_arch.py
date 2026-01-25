@@ -165,9 +165,10 @@ class LlavaMetaForCausalLM(ABC):
         #     image_features = repeat_merged_tokens_w_pos_tracking(image_features, pos_trackings)
         #     padding_masks = None
         #     sizes = None
-        if True: # Let CLIPVisionTowerToMe handle repeat_merged_tokens manually
-            sizes = None
-            pos_trackings = None
+        # [Fixed] Ensure sizes and pos_trackings are NOT cleared so they can be used for logical mapping.
+        # if True:
+        #     sizes = None
+        #     pos_trackings = None
 
         image_features = self.get_model().mm_projector(image_features)
         return image_features, padding_masks, sizes, pos_trackings
@@ -189,8 +190,6 @@ class LlavaMetaForCausalLM(ABC):
                 images = [x.unsqueeze(0) if x.ndim == 3 else x for x in images]
             concat_images = torch.cat([image for image in images], dim=0)
             image_features, padding_masks, sizes, pos_trackings = self.encode_images(concat_images) # size vector currently not used 
-            if image_features is not None:
-                print(f"[DEBUG] After DyMU: {image_features.shape[1]} visual tokens per image", flush=True)
 
             split_sizes = [image.shape[0] for image in images]
             image_features = torch.split(image_features, split_sizes, dim=0)
@@ -254,7 +253,7 @@ class LlavaMetaForCausalLM(ABC):
             # Converts to averages based on merging then ->
             # converts back to redundant tokens
             # ipdb.set_trace()
-        if pos_trackings is not None and repeat_merged_tokens:
+        if pos_trackings is not None:
             if isinstance(image_features, list):
                 pos_trackings = pos_trackings.to(image_features[0].device, dtype=image_features[0].dtype)
             else:
@@ -263,9 +262,6 @@ class LlavaMetaForCausalLM(ABC):
             pos_tracking = pos_trackings.to(torch.int64)
             assert pos_tracking.shape[0] == 1, "Only batch == 1 is supported for now"
 
-            # pos_transform = pos_trackings/(pos_trackings.sum(-1, keepdim=True)+1e-7) # (B, N_un, N)
-            # pos_transform = torch.bmm(pos_trackings.transpose(1,2).to(pos_transform.dtype), pos_transform) # (B,N,N_un) @ (B,N_un,N) -> (B,N,N)
-            
             pos_transform = None # not using for efficient version
 
             
@@ -403,7 +399,7 @@ class LlavaMetaForCausalLM(ABC):
         else:
             attention_mask = attention_mask.to(dtype=_attention_mask.dtype)
 
-        if _position_ids is None:
+        if _position_ids is None and pos_tracking is None:
             position_ids = None
 
         if len(new_impos) > 0:
@@ -420,7 +416,7 @@ class LlavaMetaForCausalLM(ABC):
             # construct the M matrix to include unique text tokens;
             N_un_img, N_img = pos_tracking.shape[1], pos_tracking.shape[2]
             N_total = new_input_embeds.shape[1]
-            batch_idx, start_idx = new_impos[0]
+            batch_idx, start_idx, num_tokens = new_impos[0]
             start_idx = start_idx.item()
             diag_blocks = []
             if start_idx > 0:
@@ -430,23 +426,30 @@ class LlavaMetaForCausalLM(ABC):
             if start_idx + N_un_img < N_total:
                 txt_eye_after = torch.eye(N_total - start_idx - N_un_img, device=new_input_embeds.device, dtype=pos_tracking.dtype) # (N_txt_aft, N_txt_aft)
                 diag_blocks.append(txt_eye_after)
-            M = torch.block_diag(*diag_blocks) # (N_un_img+N_txt = N_un, N_img+N_txt = new N_total)
-            M = M.transpose(0, 1) # (new N_total, N_un)
-            mapping_indices = M.argmax(dim=1) # (new N_total,)
-
-
-        # convert the input_embeds to N_total length for easier handling of position_ids and later rope embeddings
-        if mapping_indices is not None:
-            new_input_embeds = new_input_embeds.index_select(dim=1, index=mapping_indices) # (B, N_un, D) -> (B, N_total, D)
-            if attention_mask is not None:
-                attention_mask = attention_mask.index_select(dim=1, index=mapping_indices)
+            M = torch.block_diag(*diag_blocks) # (N_un, N_total_virtual)
+            
+            # [Logical Mapping Fix] We want Merged -> Representative Original
+            logical_pos = M.argmax(dim=1) # (N_un,)
+            
+            # For compatibility, mapping_indices is Original -> Merged
+            mapping_indices = M.transpose(0, 1).argmax(dim=1) # (N_total_virtual,)
+            
+            # Update position_ids physically stored at length N_un
+            # Note: new_input_embeds is already length N_un if we don't index_select
             if position_ids is not None:
-                position_ids = position_ids.index_select(dim=1, index=mapping_indices)
-            if new_labels is not None:
-                new_labels = new_labels.index_select(dim=1, index=mapping_indices)
+                position_ids = logical_pos.unsqueeze(0).to(position_ids.device, dtype=position_ids.dtype)
+            
+            if attention_mask is not None:
+                # attention_mask should also be length N_un
+                attention_mask = torch.ones((1, logical_pos.shape[0]), device=attention_mask.device, dtype=attention_mask.dtype)
 
-        # compatible with orignal model
-        if (not repeat_merged_tokens) and (sizes is None):
+        # Skip the physical index_select (replication)
+        # if mapping_indices is not None:
+        #     new_input_embeds = new_input_embeds.index_select(dim=1, index=mapping_indices)
+        #     ...
+
+        # compatible with original model
+        if sizes is None and pos_tracking is None:
             new_impos = None
             pos_transform = None
             pos_tracking = None
