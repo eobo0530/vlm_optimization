@@ -782,9 +782,17 @@ class LlamaModel(LlamaPreTrainedModel):
                         
                         # Only prune if image tokens exist
                         if last_layer_attention_avg_last_tok_image.size(0) > 0:
-                            actual_k = min(ATTENTION_RANK, last_layer_attention_avg_last_tok_image.size(0))
+                            if ATTENTION_RANK < 1.0:
+                                # Ratio-based pruning: ATTENTION_RANK=0.7 means 70% pruned, 30% kept
+                                actual_k = int(last_layer_attention_avg_last_tok_image.size(0) * (1.0 - ATTENTION_RANK))
+                                actual_k = max(1, actual_k)
+                            else:
+                                # Fixed K pruning
+                                actual_k = min(int(ATTENTION_RANK), last_layer_attention_avg_last_tok_image.size(0))
+                            
                             # get the indexs of the top actual_k tokens
                             top_attention_rank_index = last_layer_attention_avg_last_tok_image.topk(actual_k).indices + image_start
+                            print(f"[DEBUG] FastV Ratio Check: Image Tokens={last_layer_attention_avg_last_tok_image.size(0)}, K_Param={ATTENTION_RANK}, Result_K={actual_k}")
                             # keep index
                             keep_indexs = torch.cat( (torch.arange(image_start,device=device), top_attention_rank_index, torch.arange(image_end,seq_length_with_past,device=device)))
                         else:
@@ -856,7 +864,14 @@ class LlamaModel(LlamaPreTrainedModel):
                             gen_attention_mask = torch.ones((batch_size, seq_length_with_past), dtype=torch.bool, device=inputs_embeds.device)
                             
                             if last_layer_attention_avg_last_tok_image.size(0) > 0:
-                                actual_k = min(ATTENTION_RANK, last_layer_attention_avg_last_tok_image.size(0))
+                                if ATTENTION_RANK < 1.0:
+                                    # Ratio-based pruning: ATTENTION_RANK=0.7 means 70% pruned, 30% kept
+                                    actual_k = int(last_layer_attention_avg_last_tok_image.size(0) * (1.0 - ATTENTION_RANK))
+                                    actual_k = max(1, actual_k)
+                                else:
+                                    # Fixed K pruning
+                                    actual_k = min(int(ATTENTION_RANK), last_layer_attention_avg_last_tok_image.size(0))
+                                
                                 # get the indexs of the top actual_k tokens
                                 top_attention_rank_index = last_layer_attention_avg_last_tok_image.topk(actual_k).indices + image_start
                                 

@@ -69,6 +69,7 @@ def diagnostic():
         captured_inputs['position_ids'] = kwargs.get('position_ids')
         captured_inputs['input_ids'] = kwargs.get('input_ids')
         captured_inputs['inputs_embeds'] = kwargs.get('inputs_embeds')
+        captured_inputs['im_pos'] = kwargs.get('im_pos')
         return old_forward(*args, **kwargs)
     
     model.model.forward = forward_hook.__get__(model.model, type(model.model))
@@ -77,19 +78,24 @@ def diagnostic():
         model.generate(
             tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to("cuda"),
             images=image_tensor,
-            max_new_tokens=5
+            max_new_tokens=5,
+            output_attentions=True,
+            use_cache=True
         )
 
-    pos_ids = captured_inputs['position_ids']
-    embeds = captured_inputs['inputs_embeds']
+    pos_ids = captured_inputs.get('position_ids')
+    embeds = captured_inputs.get('inputs_embeds')
     
-    print(f"[V] Physical Sequence Length: {embeds.shape[1]}")
-    print(f"[V] Max Position ID: {pos_ids.max().item()}")
-    
-    if embeds.shape[1] < pos_ids.max().item():
-        print("[SUCCESS] Physical length is smaller than max Position ID. Logical mapping is working!")
+    if embeds is not None and pos_ids is not None:
+        print(f"[V] Physical Sequence Length: {embeds.shape[1]}")
+        print(f"[V] Max Position ID: {pos_ids.max().item()}")
+        print(f"[V] im_pos: {captured_inputs.get('im_pos')}")
+        if embeds.shape[1] < pos_ids.max().item():
+            print("[SUCCESS] Physical length is smaller than max Position ID. Logical mapping is working!")
+        else:
+            print("[FAILURE] Physical length matches Max Position ID. Tokens are still being replicated.")
     else:
-        print("[FAILURE] Physical length matches Max Position ID. Tokens are still being replicated.")
+        print("[!] Warning: Could not capture inputs correctly.")
 
     print("\n[ Analysis 2: Position ID Continuity ]")
     # Check for jumps in position_ids

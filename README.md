@@ -39,9 +39,11 @@ conda activate vlm_hybrid
 # 소스 경로 주입
 export PYTHONPATH="/home/aips/vlm/dymu/src:/home/aips/vlm/FastV/src/transformers/src:/home/aips/vlm/FastV/src/LLaVA:${PYTHONPATH}"
 
-# FastV K값 설정 (예: 36, 72 등)
-export FASTV_K=36
-```
+# FastV K값 및 동적 비율(Ratio) 설정
+- **정적 토큰 수**: `FASTV_K=72`와 같이 1 이상의 정수를 입력하면 고정된 개수의 토큰만 남깁니다.
+- **동적 프루닝 비율**: `FASTV_K=0.5`와 같이 0에서 1 사이의 소수를 입력하면 비율 기반으로 프루닝합니다.
+    - 예: `0.7` 입력 시 전체 시각 토큰 중 **70%를 제거(Pruning)**하고 30%만 유지합니다.
+    - DyMU에 의해 이미지마다 토큰 수가 달라지는 경우(예: 105개, 165개 등)에도 일정한 비율로 최적화가 가능합니다.
 
 ---
 

@@ -63,7 +63,8 @@ class HybridLLaVA(LLaVA):
         
         # FastV configuration
         env_rank = os.environ.get('FASTV_K', None)
-        default_rank = int(env_rank) if env_rank is not None else 72
+        # Handle float for ratio-based pruning (e.g., 0.5 means 50% pruned)
+        default_rank = float(env_rank) if env_rank is not None else 0.5
 
         self.model.config.use_fast_v = kwargs.get('use_fast_v', True)
         self.model.config.fast_v_inplace = kwargs.get('fast_v_inplace', True)
