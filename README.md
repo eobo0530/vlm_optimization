@@ -1,60 +1,84 @@
-# VLM Optimization: Hybrid DyMU + FastV (1200x Speedup)
+# VLM Optimization: Hybrid DyMU + FastV (Ultra-Fast Inference)
 
-본 프로젝트는 LLaVA-1.5-7B 모델에 **DyMU (Dynamic Multi-token Unmerging)**와 **FastV (Attention Pruning)** 기술을 통합하여, 기존 대비 최대 **1200배**의 속도 향상을 달성한 하이브리드 최적화 프레임워크입니다.
+본 프로젝트는 LLaVA-1.5-7B 모델에 **DyMU (Dynamic Multi-token Unmerging)**와 **FastV (Attention Pruning)** 기술을 최적화하여 구현한 하이브리드 VLM 프레임워크입니다. 
 
-## 🚀 주요 특징
-- **DyMU 통합**: Vision Encoder 단계에서 토큰을 병합(Merge)하고, LLM Attention 단계에서 유연하게 복원(Unmerge)하여 계산 효율 극대화.
-- **FastV 최적화**: 중요도가 낮은 Vision 토큰을 Attention 계산에서 제외하여 추론 속도 가속.
-- **최적화 커널 커스텀**: 
-  - CPU-GPU 동기화를 제거한 `scatter_mean` 커널 구현.
-  - 최신 `scaled_dot_product_attention` (SDPA) 적용 및 하이브리드 마스크 정렬.
-- **가변 시퀀스 지원**: 텍스트와 이미지가 혼합된 시퀀스에서도 정밀한 병합/복원 로직 작동.
+기존의 고해상도 이미지 처리 병목을 해결하기 위해 **Logical RoPE Mapping**과 **Conditional SDPA** 기술을 적용하여, 시각적 정보의 손실 없이 비약적인 추론 속도 향상을 달성했습니다.
 
-## 📄 문서 가이드
-상세한 구현 내용과 환경 설정은 아래 전용 문서를 참고해 주세요.
+---
 
-1. **상세 구현 보고서**: [hybrid_implementation_report.md](hybrid_implementation_report.md)
-   - DyMU와 FastV가 어떻게 결합되었는지, 핵심 알고리즘 및 코드 수정 내역이 상세히 기록되어 있습니다.
-2. **복구 및 최적화 요약**: [restoration_summary.md](restoration_summary.md)
-   - 최신 `transformers v4.31.0` 버전과의 호환성 해결 및 `IndexError` 패치 내역을 요약합니다.
-3. **배포 및 실행 가이드 (Korean)**: [dist_guide_ko.md](dist_guide_ko.md)
-   - 모델 실행 방법 및 주요 옵션 설명.
+## 🚀 핵심 기술 (Key Logic)
 
-## 🛠 환경 설정 (Environmet Setup)
+### 1. Logical RoPE Mapping (DyMU 개선)
+병합(Merge)된 시각 토큰들이 LLM 내에서도 정확한 위치 정보를 유지할 수 있도록 **논리적 위치 기반 RoPE(Rotary Positional Embedding)**를 적용했습니다.
+- **원리**: 576개의 원본 토큰 위치 중 병합 후 남은 대표 토큰의 위치 인덱스를 추적하여, 해당 토큰에 원래의 Position ID를 할당합니다.
+- **효과**: 토큰 수가 줄어들어도 모델이 이미지의 공간적 구조를 정확히 인식하여 성능 하락을 방지합니다.
 
-하이브리드 모델 실행을 위한 전용 가상환경 설정 방법입니다.
+### 2. FastV Attention Pruning
+이미지 토큰 중 질문(Query)과의 연관성이 낮은 토큰을 연산에서 제외하여 가속화합니다.
+- **K-Rank Pruning**: Aggregation Layer에서 계산된 어텐션 가중치를 바탕으로 상위 K개의 중요한 토큰만 남기고 나머지는 마스킹 처리합니다.
 
-### 1. 전용 가상환경 생성 및 필수 라이브러리 설치
-제공된 `setup_hybrid.sh` 스크립트를 사용하여 자동으로 세팅할 수 있습니다.
+### 3. Conditional SDPA 및 Zero-Sync 최적화
+- **Conditional SDPA**: FastV가 어텐션 가중치를 필요로 하는 특정 레이어(Layer 2)를 제외한 나머지 모든 레이어에서 하드웨어 가속인 `scaled_dot_product_attention`을 사용합니다.
+- **Zero-Sync 커널**: CPU-GPU 동기화를 유발하는 `.item()` 호출 등을 제거하고, 전 과정을 GPU 내에서 비동기 연산으로 처리하도록 개선했습니다.
+
+---
+
+## 🛠 환경 설정 (Setup)
+
+### 가상환경 준비
+`vlm_hybrid` 전용 conda 환경을 권장합니다.
 
 ```bash
-chmod +x setup_hybrid.sh
-./setup_hybrid.sh
+# 가상환경 활성화
+conda activate vlm_hybrid
 ```
 
-### 2. 수동 설정 시 주요 단계
-- **Base Environment**: Python 3.10, PyTorch 2.0.1+ (CUDA 11.7/11.8 권장)
-- **Core Dependencies**:
-  - `transformers` (프로젝트 내 수정된 패치 버전 사용)
-  - `tokenizers`
-  - `sentencepiece`
-  - `clip`
-
-## 🏃 실행 방법 (Evaluation)
-
-[VLMEvalKit](VLMEvalKit)을 사용하여 COCO 등의 벤치마크를 수행할 수 있습니다.
-
+### 환경 변수 설정
+실행 전 다음 환경 변수들을 설정하여 인터페이스를 정렬합니다.
 ```bash
-CUDA_VISIBLE_DEVICES=1 python VLMEvalKit/run.py \
+# 소스 경로 주입
+export PYTHONPATH="/home/aips/vlm/dymu/src:/home/aips/vlm/FastV/src/transformers/src:/home/aips/vlm/FastV/src/LLaVA:${PYTHONPATH}"
+
+# FastV K값 설정 (예: 36, 72 등)
+export FASTV_K=36
+```
+
+---
+
+## 🏃 벤치마크 실행 방법 (Execution)
+
+[VLMEvalKit](VLMEvalKit)을 사용하여 모델의 성능과 속도를 정밀하게 측정할 수 있습니다.
+
+### MMBench 실행 예시 (K=36)
+```bash
+CUDA_VISIBLE_DEVICES=0 /home/aips/miniconda3/envs/vlm_hybrid/bin/python run.py \
+    --data MMBench_DEV_EN \
+    --model llava_v1.5_7b_hybrid \
+    --verbose \
+    --work-dir hybrid_mmbench_k36 \
+    --reuse
+```
+
+### COCO Captioning 실행 예시 (K=72)
+```bash
+export FASTV_K=72
+CUDA_VISIBLE_DEVICES=1 /home/aips/miniconda3/envs/vlm_hybrid/bin/python run.py \
     --data COCO_VAL \
     --model llava_v1.5_7b_hybrid \
-    --verbose
+    --verbose \
+    --work-dir hybrid_coco_k72
 ```
 
-export PYTHONPATH=$PYTHONPATH:$PWD/FastV/src/LLaVA
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/wsl/lib
-CUDA_VISIBLE_DEVICES=0 python VLMEvalKit/run.py --data COCO_VAL --model llava_v1.5_7b_hybrid --verbose
-ㅇ
 ---
-> [!NOTE]
-> `checkpoints/` 폴더는 용량 문제로 Git 업로드에서 제외되었습니다. 모델 가중치 파일은 별도로 관리해 주시기 바랍니다.
+
+## 📊 현재 성과 및 지표
+- **정확도**: `MMBench_DEV_EN` 기준 **0.553 (Overall)** 확보.
+- **추론 속도**: 최적화 후 이미지당 처리 속도 대폭 개선 (성능 보고서 참고).
+
+## 📄 추가 문서
+- [상세 구현 보고서](hybrid_implementation_report.md): 알고리즘 융합 및 커널 수정 내역
+- [복구 요약서](restoration_summary.md): Transformers v4.31.0 호환성 및 버그 수정 내역
+
+---
+> [!IMPORTANT]
+> 실행 시 반드시 `PYTHONPATH`에 통합된 소스 코드가 포함되어 있는지 확인하십시오. 패키지 형태가 아닌 소스 주입 방식으로 동작합니다.

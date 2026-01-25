@@ -33,9 +33,12 @@ FastV는 중요도가 낮은 시각 토큰에 대한 Attention을 생략하여 �
 
 두 기술을 동시에 적용하기 위해 발생한 충돌과 이를 해결한 방식은 다음과 같습니다.
 
-### A. 토큰 수 정합성 문제 (Logical Alignment)
-- **문제**: FastV는 기본적으로 576개의 토큰을 기대하지만, DyMU는 이미 72개로 압축된 요약 토큰을 전달합니다.
-- **해결**: `HybridLLaVA` 설정 시 `fast_v_image_token_length`를 72로 동기화하여, FastV가 DyMU에 의해 요약된 72개의 토큰들 중 중요한 것을 고르도록 수정했습니다.
+### A. 논리적 위치 정합성 (Logical RoPE Mapping)
+- **문제**: DyMU는 576개의 토큰을 72개로 압축하지만, 표준 RoPE는 단순히 시퀀스 순서대로 위치 정보를 부여합니다. 이로 인해 압축된 토큰들이 원래 이미지의 어디에 위치했는지에 대한 정보(Spatial Bias)가 왜곡되어 정확도가 하락합니다.
+- **해결**: **Mapping Indices 기반 Logical RoPE**를 도입했습니다.
+    - `prepare_inputs_labels_for_multimodal` 단계에서 각 병합된 토큰이 대표하는 원본 위치 인덱스(`mapping_indices`)를 추출합니다.
+    - LLM의 `LlamaAttention`에서 RoPE를 적용할 때, 단순히 `0, 1, 2...` 순서가 아닌, 이 `mapping_indices`를 사용하여 원본 이미지 상의 논리적 좌표를 참조하도록 수정했습니다.
+    - 이를 통해 FastV 프루닝 이후에도 남은 시각 토큰들이 올바른 상대적 위치 관계를 유지합니다.
 
 ### B. 가속 커널(SDPA)과의 수식 호환성
 - **문제**: DyMU의 원본 방식은 Attention Weight 확보를 위해 느린 `Manual Attention`을 강제했습니다.
@@ -51,8 +54,7 @@ FastV는 중요도가 낮은 시각 토큰에 대한 Attention을 생략하여 �
 
 최종적으로 이미지당 처리 시간을 **312초에서 0.25초로 단축**시킨 핵심 최적화 기법들입니다.
 
-| 최적화 항목 | 상세 내용 | 효과 |
-| :--- | :--- | :--- |
+| **Logical RoPE Mapping** | 병합된 토큰에 원본 위치 정보를 보존하는 RoPE 인덱싱 적용 | 시각적 인지 능력 극대화 및 성능 하락 방지 |
 | **Zero-Sync scatter_mean** | `.item()`, `int(tensor)` 등 CPU-GPU 동기화를 일으키는 코드를 제거하고 순수 GPU 연산으로 대체 | 지연 시간 대폭 감소 |
 | **Conditional SDPA** | FastV용 가중치 추출 레이어 외에는 모두 하드웨어 가속 커널 사용 | 연산 효율 극대화 |
 | **Tuple-based Cache** | Transformers 4.31.0 표준인 Tuple 형태의 KV Cache 핸들링을 복구하여 인자 전달 오류 수정 | 시스템 안정성 및 데드락 해결 |
